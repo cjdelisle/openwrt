@@ -1,110 +1,42 @@
 # SPDX-License-Identifier: GPL-2.0
 if ECONET_EN75
 
-config CLKEVT_RT3352
-	bool
-	depends on SOC_RT305X || SOC_MT7620
-	default y
-	select TIMER_OF
-	select CLKSRC_MMIO
-
-config RALINK_ILL_ACC
-	bool
-	depends on SOC_RT305X
-	default y
-
-config IRQ_INTC
-	bool
-	default y
-	depends on !SOC_MT7621
+## TODO: MFD_SYSCON dependency of COMMON_CLK_EN75
+## TODO: move TIMER_OF, CLKSRC_MMIO to dependencies of EN75_TIMER
 
 choice
 	prompt "EcoNet SoC selection"
-	default SOC_RT305X
+	default SOC_EN751221
 	help
-	  Select Ralink MIPS SoC type.
+	  Select EcoNet MIPS SoC type.
 
-	config SOC_RT288X
-		bool "RT288x"
-		select MIPS_AUTO_PFN_OFFSET
-		select MIPS_L1_CACHE_SHIFT_4
-		select HAVE_PCI
-		select SOC_BUS
-
-	config SOC_RT305X
-		bool "RT305x"
-		select SOC_BUS
-
-	config SOC_RT3883
-		bool "RT3883"
-		select HAVE_PCI
-		select SOC_BUS
-
-	config SOC_MT7620
-		bool "MT7620/8"
-		select CPU_MIPSR2_IRQ_VI
-		select HAVE_PCI
-		select SOC_BUS
-
-	config SOC_MT7621
-		bool "MT7621"
-		select MIPS_CPU_SCACHE
+	config SOC_EN751221
+		bool "EN751221 family"
+		select SYS_SUPPORTS_BIG_ENDIAN
+		select CPU_BIG_ENDIAN
+		select EARLY_PRINTK_8250
+		select SYS_HAS_EARLY_PRINTK
+		select USE_GENERIC_EARLY_PRINTK_8250
+		select EN75_K34C_INTC
 		select SYS_SUPPORTS_MULTITHREADING
-		select SYS_SUPPORTS_SMP
-		select SYS_SUPPORTS_MIPS_CPS
-		select SYS_SUPPORTS_HIGHMEM
-		select MIPS_GIC
-		select CLKSRC_MIPS_GIC
-		select HAVE_PCI
-		select PCI_DRIVERS_GENERIC
-		select SOC_BUS
-		select PINCTRL
+		select GENERIC_IRQ_IPI
+		select COMMON_CLK_EN75
+		select EN75_TIMER
+		select TIMER_OF
+		select CLKSRC_MMIO
+		select MFD_SYSCON
+		select IRQ_MIPS_CPU
 
 		help
-		  The MT7621 system-on-a-chip includes an 880 MHz MIPS1004Kc
-		  dual-core CPU, a 5-port 10/100/1000 switch/PHY and one RGMII.
-endchoice
+		  The EN751221 family includes EN7512, RN7513, EN7521, EN7526.
+		  They are based on single core MIPS 34Kc processors.
 
-choice
-	prompt "Devicetree selection"
-	depends on !SOC_MT7621
-	default DTB_RT_NONE
-	help
-	  Select the devicetree.
+	config SOC_EN751627
+		bool "EN751627 NOT WORKING YET"
 
-	config DTB_RT_NONE
-		bool "None"
-
-	config DTB_RT2880_EVAL
-		bool "RT2880 eval kit"
-		depends on SOC_RT288X
-		select BUILTIN_DTB
-
-	config DTB_RT305X_EVAL
-		bool "RT305x eval kit"
-		depends on SOC_RT305X
-		select BUILTIN_DTB
-
-	config DTB_RT3883_EVAL
-		bool "RT3883 eval kit"
-		depends on SOC_RT3883
-		select BUILTIN_DTB
-
-	config DTB_MT7620A_EVAL
-		bool "MT7620A eval kit"
-		depends on SOC_MT7620
-		select BUILTIN_DTB
-
-	config DTB_OMEGA2P
-		bool "Onion Omega2+"
-		depends on SOC_MT7620
-		select BUILTIN_DTB
-
-	config DTB_VOCORE2
-		bool "VoCore2"
-		depends on SOC_MT7620
-		select BUILTIN_DTB
-
+		help
+		  The EN751627 family includes EN7516, EN7527, EN7528.
+		  They are based on dual core MIPS 1004Kc processors.
 endchoice
 
 endif

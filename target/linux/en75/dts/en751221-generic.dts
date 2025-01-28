@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/dts-v1/;
+
+#include "en751221.dtsi"
+
+/ {
+	model = "Generic EN751221 SoC";
+	compatible = "econet,en751221";
+
+	memory@0 {
+		device_type = "memory";
+		// Total memory 512MB
+		// 0x00000000 - 0x00002000: Boot config (reserved)
+		// 0x1c000000 - 0x9c000000: Palmbus
+		reg =	<0x00002000 0x1bffe000>, // Low memory 448 MB
+			<0x9c000000 0x04002000>; // High memory 64 MB
+	};
+};
+
+&cpus {
+	frequency = <900000000>; // 900mhz
+};

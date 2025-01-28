@@ -1,0 +1,1129 @@
+/dts-v1/;
+
+// THIS DOES NOT WORK
+// It's a scratch pad for nailing down where all of the devices are on the EN7526.
+
+/ {
+    compatible = "econet,en751221";
+    #address-cells = <1>;
+    #size-cells = <1>;
+
+    cpus: cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu@0 {
+            device_type = "cpu";
+            compatible = "mips,mips24KEc";
+            reg = <0>;
+            clocks = <&scu 1>;
+        };
+        cpu@1 {
+            device_type = "cpu";
+            compatible = "mips,mips24KEc";
+            reg = <1>;
+            clocks = <&scu 1>;
+        };
+    };
+
+	cpuintc: cpuintc {
+		#address-cells = <0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+		compatible = "mti,cpu-interrupt-controller";
+	};
+
+    chosen {
+        bootargs = "console=ttyS0,115200";
+    };
+
+    // Suspected palmbus from 0x1C000000 - 0x1fffffff
+
+    // Memory Controller Test Regions (used in bootloader)
+    // 0xbfa000xx
+    mem_ctrl_test: mem_ctrl_test@1fa00000 {
+        reg = <0x1fa00000 0x100>;
+        status = "disabled";
+        description = "Memory test region for system-level integrity checks";
+
+        // compatible = "airoha,an7581-mmc";
+        // reg = <0x0 0x1fa0e000 0x0 0x1000>,
+        //       <0x0 0x1fa0c000 0x0 0x60>;
+    };
+
+    spi_ctrl: spi_controller@1fa10000 {
+        // #define SF_BASE                        0xBFA10000
+        // #define _SPI_CONTROLLER_REGS_BASE                    0xBFA10000
+        compatible = "airoha,en7523-spi";
+        reg = <0x1fa10000 0x140>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        spi-rx-bus-width = <2>;
+        spi-tx-bus-width = <2>;
+
+        nand: nand@0 {
+            compatible = "spi-nand";
+            reg = <0>;
+            nand-ecc-engine = <&nand>;
+        };
+
+        // compatible = "airoha,en7581-snand";
+        // reg = <0x0 0x1fa10000 0x0 0x140>,
+        //       <0x0 0x1fa11000 0x0 0x160>;
+    };
+
+    chip_scu: syscon@1fa20000 {
+        compatible = "econet,en751221-chip-scu", "syscon";
+        reg = <0x1fa20000 0x388>;
+
+        // --- 0xbfa20000
+        // bfa20000  00 00 00 00.00 00 00 00.00 00 00 00.00 00 00 00  |................|
+        // #define RALINK_CHIP_SCU_BASE        0xBFA20000
+        // #define RG_SCU_BASE                            0xBFA20000
+        // #define CR_CHIP_SCU_BASE    0xBFA20000  //YMC_20131127
+        //
+        // start_kernel()
+        // if(isEN751221){
+        //     if (((VPint(0xbfa20000) & (0x1)) != 0)) {
+        //     VPint(0xbfa20000) &= ~(0x01);
+        // }
+        //
+        // --- 0xbfa20004 - XDSL PLL Clock
+        // #define RG_DSLPLL_EN_SCU                    (RG_SCU_BASE + 0x01*4) // 0xBFA20004
+        //
+        // --- 0xbfa20008 - 0xbfa2000c -- unused
+        //
+        // --- 0xbfa20010 - XDSL
+        // bfa20010  00 00 0f ff.00 00 00 00.3f ff ff ff.00 00 00 00  |........?.......|
+        // #define RG_DSL_HRDDS_PCW_NCP0_SCU        (RG_SCU_BASE + 0x04*4) // 0xBFA20010
+        //
+        // --- 0xbfa20014 - XDSL
+        // #define RG_DSL_HRDDS_PCW_NCP0_CHG_SCU    (RG_SCU_BASE + 0x05*4) // 0xBFA20014
+        //
+        // --- 0xbfa20018 - 0xbfa20064 -- unused
+        // bfa20020  00 00 00 07.00 00 1f ff.00 00 00 00.00 00 01 fb  |................|
+        // bfa20030  00 00 00 00.00 00 00 00.00 00 00 00.00 00 00 00  |................|
+        // bfa20040  00 00 00 00.00 00 00 00.00 00 00 00.00 00 0f ff  |................|
+        // bfa20050  00 00 00 00.00 00 0f ff.00 00 00 00.3f ff ff ff  |............?...|
+        //
+        // --- 0xbfa20068 - SPI Flash clock - (used in 2.6 only)
+        // bfa20060  00 00 00 00.3f ff ff ff.00 00 00 00.00 00 00 00  |....?...........|
+        // #define SF_CLK_CHANGE                0xBFA20068
+        //
+        // --- 0xbfa2006c - 0xbfa20078 -- unused
+        //
+        // --- 0xbfa2007c -- GPIO (activate GPIO chip?) only used in bootloader.
+        // bfa20070  00 00 1f ff.00 00 00 00.00 00 1f ff.00 00 00 00  |................|
+        // #define RG_GPIO_MODE 0xbfa2007c
+        // VPint(0xbfa2007c) = (VPint(0xbfa2007c) | 0x3e00);
+        //
+        // --- 0xbfa20080 - 0xbfa200c8 -- unused
+        // bfa20080  00 00 00 00.00 00 00 77.00 00 00 00.00 00 00 00  |.......w........|
+        // bfa20090  00 00 00 00.00 00 00 00.00 00 00 00.00 00 00 00  |................|
+        // bfa200a0  00 00 00 00.00 00 00 00.00 00 00 00.00 00 00 00  |................|
+        // bfa200b0  00 00 00 07.00 00 00 00.00 00 0f ff.3f ff ff ff  |............?...|
+        //
+        // --- 0xbfa200cc -- SPI Flash clock (used in 4.9 and bootloader)
+        // bfa200c0  00 00 00 07.00 00 1f ff.00 00 00 04.00 00 0a 01  |................|
+        // spi_nand_flash.c
+        // #define _SPI_FREQUENCY_ADJUST_REG            0xBFA200CC
+        // #define SF_CLK_CHANGE                0xBFA200CC
+        //
+        // --- 0xbfa200d0 - used in EN7512 only
+        // VPint(0xbfa200d0) = 0x2000; /*FNDIV, clock /2*/
+        //
+        // --- 0xbfa200d4 -- unused
+        //
+        // --- 0xbfa200d8 -- PCM Clock, never touched
+        // pcmdriver.h
+        // #define PCM_CLK_OUTPUT    0xbfa200d8
+        //
+        // --- 0xbfa200dc - 0xbfa200e0 -- unused
+        //
+        // --- 0xbfa200e4 -- GPON ToD clock
+        // SetBits((uint)(0xbfa200e4), 0x100);
+        // IO_SBITS(0xbfa200e4, 0x100);
+        //
+        // --- 0xbfa200e8 -- unused
+        //
+        // --- 0xbfa200ec -- GPON ToD clock
+        // IO_SBITS(0xbfa200ec, 0x02);
+        //
+        // --- 0xbfa200f0 - 0xbfa200f4 -- unused
+        //
+        // --- 0xbfa200f8 -- Ethernet "SCU" never touched
+        // #define RG_7530_RSTN        0xBFA200F8
+        //
+        // --- 0xbfa200fc -- unused
+        //
+        // --- 0xbfa20100 -- unused
+        //
+        // --------------------------------------------------------------------
+        // --- 0xbfa20104 -- IO Muxer
+        //
+        // This pinmux is terrifying, there aren't any sane contiguous bits that look
+        // like numbers to select between options. Every update generally only sets or clears
+        // a batch of bits.
+        //
+        // The most similar pinmux I can find is pinctrl-an7581.c, but that's for ARM and
+        // the registers and bits are not the same.
+        //
+        // What follows is everything I know based on the actual code for this platform.
+        //
+        // Some code disables the conflicting GPIOs while enabling it's function, other code
+        // does not. Some code comments about which GPIOs are lost by its function being
+        // enabled, other code does not.
+        //
+        // Fortunately there isn't really a need to switch between devices in common usage.
+        // We can probably just write a bitfield to the register on init and leave it that
+        // way.
+        //
+        // The only meaningful conflicts are going to come with the ZSI (PCM / VOIP) driver
+        // and even then, there is probably a sane configuration per-board which can be set
+        // and forgotten.
+        // 
+        // What we (think) we know:
+        //
+        // GPIOs:
+        // 0 - ??
+        // 1 - ?? 
+        // 2 - bit 10 - GPIO_PCM_RESET || LED_XPON_STATUS
+        // 3 = bit 8 - GPIO_SPI_SLIC_2nd || SPI NAND QUAD MODE
+        // 4 = LED_INTERNET_STATUS || GPIO_ZSI_ISI_2nd
+        // 5 = flash write protect off || GPIO_ZSI_ISI_2nd
+        // 6 = PCI bonding slave || GPIO_ZSI_ISI_2nd
+        // 7 = bit 6 - ?LED? || GPIO_ZSI_ISI_2nd
+        // 8 = bit 5 - LED
+        // 9 - bit 4 - LED
+        // 10 - bit 3 - LED || SPI NAND QUAD MODE
+        // 11 = LED_USB_STATUS
+        // 12 = Ethernet LED
+        // 13 = ??
+        // 14 = ??
+        // 15 = LED PON
+        // 16 = LED_PHY_TX_POWER_DISABLE
+        // 17 = LED Alarm
+        // 18 = MT6306_RST_GPIO
+        // 19 = LED_PIN_FXS1
+        // 20 = ??
+        // 21 = power LED
+        // 22 = bit 2 - XPON "enable 1pps signal output from GPIO22"
+        // 23 = ??
+        // 24 = LED_XPON_LOS_ON_STATUS
+        // 25 = MDC_GPIO_DEF // also dmt3095 power on
+        // 26 = MDIO_GPIO_DEF // changed exModeMDIOGpioConf
+        //
+        // BITS:
+        // 0 = RG_PON_I2C_MODE
+        // 1 = ??
+        // 2 = GPIO22 - XPON "enable 1pps signal output from GPIO22"
+        // 3 = GPIO10 - LED && !set_spi_quad_mode_shared_pin
+        // 4 = GPIO9 - LED
+        // 5 = GPIO8 - LED
+        // 6 = GPIO7 - LED
+        // 7 = ?? - LED && !set_spi_quad_mode_shared_pin
+        // 8 = GPIO3 - GPIO_SPI_SLIC_2nd && !set_spi_quad_mode_shared_pin
+        // 9 = ??
+        // 10 = GPIO2 - GPIO_PCM_RESET || GPIO_SPI_SLIC_1st
+        // 11 = ?? - !set_spi_quad_mode_shared_pin
+        // 12 = ?? - PCM_PIN_MODE || GPIO_SPI_SLIC_1st
+        // 13 = ?? - GPIO_ZSI_ISI_1st || GPIO_SPI_SLIC_1st
+        // 14 = ?? - GPIO_ZSI_ISI_2nd || GPIO_SPI_SLIC_1st
+        // 15 = ?? - RG_GPIO_PON_MODE
+        // 16 = ??
+        // 17 = ??
+        // 18 = ?? - UART2_MODE && !set_spi_quad_mode_shared_pin
+        // 19 = ?? - set_spi_quad_mode_shared_pin
+        // 20 = GPIO30 - ZYXEL_PCIE_RESET0_PIN_AS_GPIO_30
+        // 21 = GPIO31 = ZYXEL_PCIE_RESET1_PIN_AS_GPIO_31
+        //
+        // Bits of code which touch this register:
+        //
+        // regWrite(IOMUX_CONTROL1,(regRead(IOMUX_CONTROL1))&(~GPIO_SPI_SLIC_2nd)); /*release GPIO3  */
+        // regWrite(IOMUX_CONTROL1,(regRead(IOMUX_CONTROL1))&(~GPIO_ZSI_ISI_2nd)); /*release GPIO4~7  */
+        // IO_SBITS(0xbfa20104, 0x04); /* enable 1pps signal output from GPIO22  */
+        // reg |= (0x1<<18); //UART2_MODE
+        // reg &= ~((0x01 << 3) | (0x01 << 7)); /* Disable Lan0_LED GE_Led */
+        // #define RG_GPIO_PON_MODE                        (1<<15)
+        // #define RG_PON_I2C_MODE                            (1<<0)
+        // /* set gpio 7 ~ gpio 10 to gpio mode */ // word &= ~(0x78); // 0b1111000 // /* gpio 7 ~ gpio 10 is for lan led in demo board */
+        // /* set gpio 7 ~ gpio 10 to phy mode */ word |= (0x78);
+        // 
+        // set_spi_quad_mode_shared_pin()
+        // VPint(IOMUX_CONTROL1) |= (1 << 19);
+        // VPint(IOMUX_CONTROL1) &= ~((1 << 18) | (1 << 11) | (1 << 8) | (1 << 7) | (1 << 3));
+        //
+        // led_gpio_enable()
+        // value |= 0xF8; 0b11111000
+        //
+        // regWrite(IOMUX_CONTROL1,(regRead(IOMUX_CONTROL1))&(~GPIO_SPI_SLIC_2nd)); /*release GPIO3  */
+        // regWrite(IOMUX_CONTROL1,(regRead(IOMUX_CONTROL1))&(~GPIO_ZSI_ISI_2nd)); /*release GPIO4~7  */
+        //
+        // regWrite(IOMUX_CONTROL1,((regRead(IOMUX_CONTROL1)&(~0x7d00))|GPIO_ZSI_ISI));
+        // regWrite(IOMUX_CONTROL1,((regRead(IOMUX_CONTROL1)&(~0x7d00))|GPIO_ZSI_ISI|GPIO_PCM_RESET));/*CSI need gpio2 as pcm reset*/
+        // /* ZTE use GPIO2 for USB_LED,  slic reset with GPIO9, so clear bit10 */ gpio_spi_slic &= (~GPIO_PCM_RESET);
+        // regWrite(IOMUX_CONTROL1,((regRead(IOMUX_CONTROL1)&(~0x7d00))|gpio_spi_slic));
+        // 
+        // #define PCM_PIN_MODE      0x1000
+        // #define GPIO_ZSI_ISI_1st      0x2000
+        // #define GPIO_ZSI_ISI_2nd      0x4000
+        // #define GPIO_SPI_SLIC_1st         0x7400
+        // #define GPIO_SPI_SLIC_2nd         0x100
+        // #define GPIO_PCM_RESET     0x400
+        //
+        // --------------------------------------------------------------------
+        //
+        // -- 0xbfa20108 -- Seemingly another IO Pinmux register
+        // #define RG_FORCE_GPIO2_EN    0xbfa20108
+        // word = regRead32(RG_FORCE_GPIO2_EN);
+        // word |= (0x170);
+        // regWrite32(RG_FORCE_GPIO2_EN, word);
+        //
+        // --- 0xbfa2010c - 0xbfa20118 -- unused, possibly pinmux
+        // pinctrl-an7581.c has 7 IOMUX control registers, only 6 possible registers here
+        //
+        // --- 0xBFA2011C - DMT SRAM or FNLL register
+        // /* Power down DMT SRAM & FNLL since xDSL is not supported */
+        // VPint(0xBFA2011C) = 0x2;
+        //
+        // --- 0xBFA20120 - DMT SRAM or FNLL register
+        // /* Power down DMT SRAM & FNLL since xDSL is not supported */
+        // VPint(0xBFA20120) = 0x100020;
+        //
+        // --- 0xBFA20124 - 0xBFA20144 -- unused
+        //
+        // --- 0xBFA20148 - DMT register
+        // /* Power down DMTC, and keep VD PL still on. */
+        // VPint(0xBFA20148) = 0xFEFF001C;
+        //
+        // --- 0xBFA2014c - 0xBFA20158 -- unused
+        //
+        // --- 0xbfa2015c -- rgmii interface
+        // /* set rgmii interface into rgmii mode */
+        // reg = read_reg_word(0xBFA2015C)| 0x1;
+        //
+        // --- 0xbfa20160 -- unused
+        //
+        // --- 0xbfa20164 -- unused
+        //
+        // --- 0xBFA20168 -- SIMLDO power down
+        // VPint(0xBFA20168) |= (1<<8);
+        //
+        // --- 0xbfa2016c -- EN7512 GB ethernet calibration - RG_BG_RASEL
+        // regReadWord(0xbfa2016c, reg_temp);
+        //
+        // --- 0xbfa20170 - 0xbfa20200 -- unused
+
+    };
+
+    // ??? <0x1fa30000, 0x300>
+    // ??? <0x1fa30400, 0x18>
+    // ??? <0x1fa30500, 0x300>
+    // ??? <0x1fa32480, 0x37c> -- weird quazi-repeating pattern
+    // ??? <0x1fa30800, 0x300>  -- Device X (1st)
+    // ??? <0x1fa30e00, 0x300>
+    // ??? <0x1fa31800, 0x300>  -- Device X (2nd)
+
+
+
+    // bfa70000 - bfa7ffff - reading here hangs the system
+
+    /* PCIe Gen2 PHY 0xbfac0xxx */
+    pci_phy1: pci_phy1@1fac0000 {
+        compatible = "ralink,pci-phy";
+        reg = <0x1fac0000 0x1000>;  // 4 KB for PCI PHY 1 (within 0xbfac0xxx range)
+    };
+
+    /* GPON PHY configuration */
+    gpon_phy: gpon_phy@1faf0000 {
+        compatible = "ralink,gpon-phy";
+        reg = <0x1faf0000 0x1000>; /* GPON PHY register range */
+        /* Additional GPON-specific properties here */
+
+        // Reading this memory range hangs the system.
+    };
+
+    /* USB PHY configuration */
+    usbphy: usbphy@1faf1000 {
+        // Need to write this phy driver, follow the script of usbphy.c
+        // compatible = "ralink,usb-phy";
+        reg = <0x1faf1000 0x1000>; /* USB PHY register range */
+        /* USB PHY initialization properties */
+        usb-phy-debug;
+
+        // resets = <&rstctrl 22>;
+        // reset-names = "host";
+    };
+
+    pci_phy0: pci_phy@1faf2000 {
+        compatible = "ralink,pci-phy";
+        reg = <0xbfaf2000 0x1000>;
+    };
+
+    scu: system-controller@1fb00000 {
+        // SCU (System Control Unit) configuration
+        compatible = "econet,en751221-scu", "econet,en75-scu", "syscon";
+        // reg = <0x1fb00000 0x970>;
+        reg = <0x1fb00000 0x1000>;
+        #clock-cells = <1>;
+        #reset-cells = <1>;
+        //
+        // #define RALINK_SYSCTL_BASE        0xBFB00000
+        // #define TSCONTROL_BASE   0xBFB00000
+        // #define CR_AHB_BASE        0xBFB00000
+        // #define CR_SCU_BASE    0xbfb00000
+        //
+        // --- 0xbfb00000 - Arbiter/Decoder Status
+        // #define CR_AHB_AACS            (CR_AHB_BASE + 0x00)
+        // status=regRead32(CR_AHB_AACS);
+        // VPint(CR_AHB_AACS) = 0xffff; /* setup bus timeout value */
+        //
+        // --- 0xbfb00004 - unused
+        //
+        // --- 0xbfb00008 - Arbiter/Decoder CR_AHB_ABEM
+        // #define CR_AHB_ABEM          (CR_AHB_BASE + 0x08)
+        //
+        // --- 0xbfb0000c - Arbiter/Decoder CR_AHB_ABEA
+        // #define CR_AHB_ABEA            (CR_AHB_BASE + 0x0C)
+        //
+        // --- 0xbfb00010 - Arbiter/Decoder CR_AHB_DMB0
+        // #define CR_AHB_DMB0           (CR_AHB_BASE + 0x10)
+        //
+        // --- 0xbfb00014 - Arbiter/Decoder CR_AHB_DMB1
+        // #define CR_AHB_DMB1           (CR_AHB_BASE + 0x14)
+        //
+        // --- 0xbfb00018 - Arbiter/Decoder CR_AHB_DMB2
+        // #define CR_AHB_DMB2           (CR_AHB_BASE + 0x18)
+        //
+        // --- 0xbfb0001c - Arbiter/Decoder CR_AHB_DMB3
+        // #define CR_AHB_DMB3           (CR_AHB_BASE + 0x1C)
+        //
+        // --- 0xbfb00020 - Arbiter/Decoder CR_AHB_SMB0
+        // #define CR_AHB_SMB0           (CR_AHB_BASE + 0x20)
+        //
+        // --- 0xbfb00024 - Arbiter/Decoder CR_AHB_SMB1
+        // #define CR_AHB_SMB1           (CR_AHB_BASE + 0x24)
+        //
+        // --- 0xbfb00028 - Arbiter/Decoder CR_AHB_SMB2
+        // #define CR_AHB_SMB2           (CR_AHB_BASE + 0x28)
+        //
+        // --- 0xbfb0002c - Arbiter/Decoder CR_AHB_SMB3
+        // #define CR_AHB_SMB3           (CR_AHB_BASE + 0x2C)
+        //
+        // --- 0xbfb00030 - Arbiter/Decoder CR_AHB_SMB4
+        // #define CR_AHB_SMB4           (CR_AHB_BASE + 0x30)
+        //
+        // --- 0xbfb00034 - Arbiter/Decoder CR_AHB_SMB5
+        // #define CR_AHB_SMB5           (CR_AHB_BASE + 0x34)
+        // 
+        // --- 0xbfb00038 -- Flash controller
+        // VPint(0xbfb00038) |= 0x80000000; // enable addr bigger than 4M support
+        //
+        // --- 0xbfb0003c -- unused
+        //
+        // --- 0xbfb00040 -- reset control register
+        // VPint(0xBFB00040) = 0x80000000;  /* Triggered Software Reset */
+        // VPint(0xbfb00040) |= (1<<0); // reset ddr device
+        //
+        // --- 0xbfb00044 -- DDR Self Refresh Mode
+        // #define CR_DRAMC_HW_SREF_CONF    (0x44 | CR_SCU_BASE)
+        // VPint(0xbfb00044) = 1; //Enable DDR Self Refresh Mode
+        //
+        // --- 0xbfb00048 - unused
+        //
+        // --- 0xbfb00050 - Non-maskable interrupt
+        // #define CR_AHB_NMI_CONF        (CR_AHB_BASE + 0x50)
+        // uint32 word = regRead32(CR_AHB_NMI_CONF); // is_nmi_enable(void)
+        //
+        // --- 0xbfb00054 - unused
+        //
+        // --- 0xbfb00058 - CPU clock control
+        // #define CR_AHB_CPUF           (CR_AHB_BASE + 0x58)
+        // #define CR_PRATIR              (CR_AHB_BASE + 0x58)
+        // VPint(CR_PRATIR) = 1; /* clear an interrupt */
+        //
+        // --- 0xbfb0005c - Ethernet chip identification
+        // #define PDIDR            (VPint(0xBFB0005C)&0xFFFF)
+        // #define  IS_EN7512_E1_E2_CHIP ( isEN751221 && ((regRead32(0xbfb0005c) & 0xFFFF) == 0x1))
+        //
+        // --- 0xBFB00060 - Initialize timer
+        // #define CR_MON_TMR             (CR_AHB_BASE + 0x60)
+        // #define RALINK_REG_GPIOMODE        (RALINK_SYSCTL_BASE + 0x60)
+        // regWrite32(CR_MON_TMR, 0xcfffffff);
+        //
+        // --- 0xBFB00064 - System identification register
+        // #define isEN7526c        (((VPint(0xbfb00064) & 0xffff0000)) == 0x00080000)
+        //
+        // --- 0xBFB00070 - ETH / XPON mode selector
+        // #define SCU_WAN_CONF_REG            (0xBFB00070)    /* used to select GPON/EPON MAC */
+        //
+        // --- 0xBFB00074 - DRAM Configuration
+        // #define CR_DRAMC_CONF            (0x74 | CR_SCU_BASE)
+        // VPint(0xbfb00074) |= (1<<4);
+        // VPint(CR_DRAMC_CONF) &= ~(0x1<<2); // watchdog_reset
+        //
+        // --- 0xBFB00078 - unused
+        //
+        // --- 0xBFB0007c - unused
+        //
+        // --- 0xBFB00080 - Configuration register, used to shutdown GDMA channels to the ethernet
+        // #define CR_AHB_PMCR           (CR_AHB_BASE + 0x80)
+        // #define SCU_PROBE_MODE_CFG 0xbfb00080
+        //
+        // --- 0xBFB00084 - DMT (Discrete Multi-tone / XDSL) Control Register
+        // #define CR_AHB_DMTCR           (CR_AHB_BASE + 0x84)
+        // #define RG_DMT_CTRL                            0xBFB00084
+        // /* assert DMT reset */
+        // VPint(CR_AHB_DMTCR) = 0x1;
+        //
+        // --- 0xbfb00088 - PCI control register
+        // #define CR_AHB_PCIC               (CR_AHB_BASE + 0x88)
+        // #define ECONET_PCIEC_REG        (RALINK_SYSCTL_BASE + 0x088)
+        // //disable port 0
+        // tmp = regRead32(0xbfb00088);
+        // regWrite32(0xbfb00088, (tmp & ~(1<<23)));
+        //
+        // --- 0xbfb0008c -- Hardware configuration register - read only
+        // #define  HW_CONF_REG     0xbfb0008c
+        // #define CR_AHB_HWCONF       (CR_AHB_BASE + 0x8C)
+        //
+        // --- 0xbfb00090 -- ETH, USB, PCIe mode selection
+        // #define CR_AHB_SSR           (CR_AHB_BASE + 0x90)
+        // VPint(CR_AHB_SSR) |= (1<<11)|(1<<10)|(1<<9)|(1<<8); // eth_latsch_up()
+        // temp |= ((1<<30) | (1<<29)); // usb_tc3182_rt65168_phy_init() /*choose op mode host*/
+        // tmp |= (1<<0 | 1<<2 | 1<<3); // tc3162_pcie_init() /*pcie relate clock setting*/
+        //
+        // --- 0xBFB00094 -- Another SSR, defined but unused in the code
+        // #define SSR3 0xBFB00094
+        //
+        // --- 0xBFB00098 -- unused
+        //
+        // --- 0xBFB0009C -- System status register? Read only, used in isGenernalFPGA_2()
+        // #define CR_AHB_SSTR            (CR_AHB_BASE + 0x9C)
+        // #define CR_IMEM           (CR_AHB_BASE + 0x9C)
+        //
+        // --- 0xBFB000A0 -- Set DMEM start address, apparently you can decide where DMEM is mapped (?)
+        // #define CR_CRCC_REG        (CR_AHB_BASE + 0xA0)
+        // #define CR_DMEM           (CR_AHB_BASE + 0xA0)
+        // VPint(CR_DMEM) = CPHYSADDR(&__dmem);
+        //
+        // --- 0xBFB000A4 -- unused
+        //
+        // --- 0xBFB000A8 -- USB Host Control Register (UHCR)
+        // #define CR_AHB_UHCR        (CR_AHB_BASE + 0xA8)
+        // /* configure USB Host Control Register to 
+        // do byte swaping in HW --Trey */
+        // regWrite32(0xbfb000a8, 0x00000060);
+        //
+        // --- 0xBFB000AC -- USB
+        // temp &= ~(1<<27); // select reset mode internal
+        //
+        // --- 0xBFB000B0 -- Read system clock speed
+        // #define CR_GPIO_TYPE        0xBFB000B0
+        // #define CR_AHB_PLL           (CR_AHB_BASE + 0xB0)
+        //
+        // unsigned int current_m = (VPint(CR_AHB_PLL)>>25)&0x1f;
+        // unsigned int current_n = (VPint(CR_AHB_PLL)>>16)&0x1ff;
+        // unsigned int currentfreq = 6*(current_n+1)/((current_m+1));
+        //
+        // --- 0xBFB000B4 -- Flash init (some boards)
+        // VPint(0xbfb000b4) = 0x154;
+        //
+        // --- 0xBFB000B8 -- PCI "Address bus mapping register" (some boards)
+        // #define AHB_BUS_ADDR                 0xbfb000b8
+        // #define CR_AHB_ABMR           (CR_AHB_BASE + 0xB8)
+        // #define BOOT_TRAP_CONF        (0xBFB000B8) // CONFIG_ECONET_EN7528
+        // regWrite32(0xbfb000b8, 0x00000001);
+        //
+        // --- 0xBFB000BC -- Flash control (RT63260)
+        // VPint(0xbfb000bc) = (VPint(0xbfb000bc) & (~(1<<9))) | (1<<2);  // flashhal.c
+        // #define isRT63260C ((((unsigned char)(VPint(0xbfb000bc)>>9)&0x01)==0x1)?1:0)
+        //
+        // --- 0xBFB000C0 -- Clock Generator Configuration Register
+        // #define CR_CKGEN_CONF        (CR_AHB_BASE + 0xC0)
+        // VPint(0xbfb000c0) &= ~((1<<5)|(1<<6)|(1<<7));//CPU divide to 32 and ram divide to 3
+        // VPint(0xbfb000c0) |= (1<<0); // /* set RGMII 1 phase=90 */
+        // VPint(0xbfb000c0) |= (1<<1); // /* set RGMII 2 phase=90 */
+        //
+        // --- 0xBFB000C4 -- Clock Generator Configuration Register 2
+        // VPint(0xbfb000c4) = 0x1000603;/* usb port0 + p1 phy clock bit[25][26][27]*/
+        //
+        // --- 0xBFB000C8 - unused
+        //
+        // --- 0xBFB000CC - Power Save Mode Control Reg (?) Defined, never used.
+        // #define CR_PSMCR               (CR_AHB_BASE + 0xCC)
+        //
+        // --- 0xBFB000D0 -- Power Save Mode Data/Monitor Reg (?) Defined, never used.
+        // #define CR_PSMDR               (CR_AHB_BASE + 0xD0)
+        // #define CR_PSMMR               (CR_AHB_BASE + 0xD0)
+        //
+        // --- 0xBFB000D4 -- 0xBFB000e4 -- unused
+        //
+        // --- 0xBFB000e8 --- USB Phy Register
+        // x=VPint(0xbfb000e8);
+        // x &= ~((1<<6));
+        // x |= ((1<<27));
+        //
+        // --- 0xBFB000EC -- USB Phy Register2
+        // VPint(0xbfb000ec) = 0xe0; /* usb port0 + p1 phy reset [6][7][8]*/
+        //
+        // --- 0xBFB000F0 -- unused
+        //
+        // --- 0xBFB000F4 -- Unknown, unused
+        // #define CR_SRAM               (CR_AHB_BASE + 0xF4)
+        //
+        // --- 0xBFB000F8 -- Configuration (e.g. isMT7510())
+        // #define MT751020_SUBMODEL_REG   (0xbfb000f8)
+        // #define CR_AHB_HWCONF2      (CR_AHB_BASE + 0xF8)
+        //
+        // --- 0xBFB000FC -- 0xBFB001bc -- unused
+        //
+        // --- 0xBFB001c0 -- Arbiter/Decoder clock
+        // #define CR_AHB_CLK            (CR_AHB_BASE + 0x1c0)
+        // VPint(CR_AHB_CLK) |= 0x57e1;//restore ahb clk to default value
+        // 
+        // --- 0xBFB001c4 -- unused
+        //
+        // --- 0xbfb001c8 -- CPU Clock (only one of these three clocks is active on a given board)
+        // //VPint(0xbfb001c8) |= (1<<24); // bypass pll 2 700M
+        // pllreg = (((VPint(0xbfb0008c)&((1<<9)|(1<<8)))>>8) == 0x1) ? 0xbfb001d0 : (VPint(0xbfb0008c)&(1<<25) ? 0xbfb001c8 : 0xbfb001cc);
+        //
+        // --- 0xbfb001cc -- CPU Clock 2
+        // //VPint(0xbfb001cc) |= (1<<24); // bypass pll 2 665M
+        //
+        // --- 0xbfb001d0 -- CPU Clock 3
+        // //VPint(0xbfb001d0) |= (1<<24); // bypass pll 2 500
+        //
+        // --- 0xbfb001d4 - 0xbfb001fc -- unused
+        //
+        // --- 0xbfb00200 --- ETH Switch Flow Control
+        // /* Restore FE GSW_TX/LAN_WAN Flow Control */
+        // reg_value = read_reg_word(0xbfb00200);
+        // reg_value |= (orig_fe_cpc & 0xb000000);
+        // write_reg_word(0xbfb00200, reg_value);
+        //
+        // --- 0xbfb00204 - 0xbfb0023c -- unused
+        //
+        // --- 0xbfb00240 -- set in bootloader, hard coded number based on chip
+        // VPint(0xbfb00240) = tmpId;
+        //
+        // --- 0xbfb00244 -- non-maskable interrupt table goes here
+        // VPint(0xbfb00244) = (unsigned int)base;
+        //
+        // 0xbfb00248 - 0xbfb0027c -- unused
+        //
+        // --- 0xbfb00284 -- dram size, system clock, flash debug info
+        // #define REG_SAVE_INFO 0xBFB00284
+        // if(VPint(0xBFB00284) == 0x1)
+        // #define GET_DRAM_SIZE    (regRead32(REG_SAVE_INFO)&0xfff)
+        // See Kernel49:
+        // #define GET_IS_DDR4            (GET_REG_SAVE_INFO_POINT->raw.isDDR4)
+        // #define GET_DRAM_SIZE            (GET_REG_SAVE_INFO_POINT->raw.dram_size)
+        // #define GET_SYS_CLK            (GET_REG_SAVE_INFO_POINT->raw.sys_clk)
+        // #define GET_IS_FPGA            (GET_REG_SAVE_INFO_POINT->raw.isFpga)
+        // #define GET_IS_SPI_ECC            (GET_REG_SAVE_INFO_POINT->raw.isCtrlEcc)
+        // #define GET_PACKAGE_ID            (GET_REG_SAVE_INFO_POINT->raw.packageID)
+        // #define GET_IS_SECURE_MODE        (GET_REG_SAVE_INFO_POINT->raw.isSecureModeEn)
+        // #define GET_IS_SECURE_HWTRAP        (GET_REG_SAVE_INFO_POINT->raw.isSecureHwTrapEn)
+        //
+        // --- 0xbfb00288 - 0xbfb00354 -- unused
+        //
+        // --- 0xbfb00358 -- ETH Frame Engine (FE) Control Register
+        // write_reg_word(0xbfb00358, 0x55550001); // macReset()
+        //
+        // --- 0xbfb0035c -- unused
+        //
+        // --- 0xbfb00360 -- unused
+        //
+        // --- 0xbfb00364 - CPU freq control - only in bootloader
+        // cur_cpu_value = (VPint(0xbfb00364));
+        //
+        // --- 0xbfb00368 - CPU freq control 2 - only in bootloader
+        // tmp = VPint(0xbfb00368);
+        //
+        // --- 0xbfb0036c - 0xbfb0037c -- unused
+        //
+        // --- 0xbfb00380 - XPON Phy Reset (NON-EN7521)
+        // #define TOP_TEST_MISC0_CTRL         (0xbfb00380)    /* used to reset PON PHY */
+        // #define TEST_MISC0    (0xBFB00380)
+        // Bit 25: SCU_GPON_PHY_RESET
+        //
+        // --- 0xbfb00384 - 0xbfb00398 -- unused
+        //
+        // --- 0xbfb0039c - Set while changeing CPU Freq
+        // VPint(0xbfb0039c) = 0x00750025;
+        //
+        // --- 0xbfb003a0 - 0xbfb003ac - Data access registers used on MT7510_E1
+        // tmp = VPint((reg & 0xf) + 0xbfb003a0);
+        //
+        // --- 0xbfb003b0 - 0xbfb003bc - Query current CPU frequency (bootloader)
+        // cur_cpu_value = (((VPint(reg_temp)>>24)&0xff)<<24) | (((VPint(reg_temp)>>19)&0x1)<<23) | (VPint(0xbfb00364)&0x7fffff);
+        //
+        // --- 0xbfb003c0 - 0xbfb00828 -- unused
+        //
+        // --- 0xbfb0082c -- Clock Configuration Register - never set unless FPGA
+        // #define CR_CLK_CFG             (CR_AHB_BASE + 0x82c)
+        //
+        // --- 0xbfb00830 XPON Reset Control Register (EN7521)
+        // #define TOP_RST_CTRL_SW2                                   0xbfb00830
+        // val = IO_GPHYREG(TOP_RST_CTRL_SW2); //xpon phy top reset ,EN7521 high active
+        //
+        // --- 0xbfb00834 -- The Reset Control Register !!!
+        // #define SCU_RESET_REG               (0xbfb00834)
+        // #define CR_RSTCTRL2            (CR_AHB_BASE + 0x834)
+        // #define REG_E_SW_RST     0xBFB00834  //bit31:for reset epon mac
+        // #define IPRESET_ADDR            0xBFB00834
+        // #define ECONET_RSTCTRL_REG        (RALINK_SYSCTL_BASE + 0x834)
+        //
+        // BITS:
+        // 0 = VoIP I2S - ZSI/ISI 1 & spi/pcm mode slic (VoIP), RALINK_I2S1_RST
+        // 1 = ETH QDMA1_RST, RALINK_FE_QDMA_LAN_RST
+        // 2 = ETH QDMA2_RST, RALINK_FE_QDMA_WAN_RST
+        // 3
+        // 4 = VoIP ZSI (Zarlink), RALINK_PCM2_RST
+        // 5 = XDSL PTM MAC RALINK_PTM_MAC_RST
+        // 6 = RALINK_CRYPTO_RST
+        // 7 = XDSL ATM Segmentation / Reassembly RALINK_SAR_RST
+        // 8 = RALINK_TIMER_RST
+        // 9
+        // 10 = RALINK_BONDING_RST
+        // 11 = RALINK_PCM1_RST
+        // 12 = RALINK_UART_RST
+        // 13 = GPIO, RALINK_PIO_RST
+        // 14 = RALINK_DMA_RST
+        // 15
+        // 16 = RALINK_I2C_RST
+        // 17 = VoIP ICI, RALINK_I2S2_RST
+        // 18 = SPI, RALINK_SPI_RST
+        // 19 = RALINK_UARTL_RST
+        // 20
+        // 21 = ETH Frame engine FE_RST, RALINK_FE_RST
+        // 22 = USB IPRESET_BIT1, RALINK_UHST_RST
+        // 23 = ETH Switch ESW_RST, RALINK_ESW_RST
+        // 24 = ETH PHY EPHY_RST
+        // 25 = USB IPRESET_BIT2 - unused, also "assert SFC2 reset", RALINK_SFC2_RST
+        // 26 = PCI Slot 0, RALINK_PCIE0_RST
+        // 27 = PCI Slot 1, RALINK_PCIE1_RST
+        // 28
+        // 29 = PCI Host Bridge (?), RALINK_PCIEHB_RST
+        // 30 = SIM (3G/4G)
+        // 31 = XPON SCU_GPON_MAC_RESET
+        //
+        // VPint(0xbfb00834) = ~((1<<8) | (1<<13) | (1<<31)); /*reset all block exclude timer, GPIO , pon*/
+        // regWrite32(slicRegAddress,0x0000001|temp_val );/*bfb00834 bit[0] for reset ZSI/ISI 1 & spi/pcm mode slic */
+        // x |= (1<<5); //use SCU_RST to hold PTM MAC reset when vdsl is link down.
+        // SIM_WriteReg32(0xbfb00834,(SIM_Reg(0xbfb00834) | 0x40000000));
+        // value |= (0x1<<22); // USB (Mediatek)
+        // word &= ~(1<<18);//enable spi
+        // VPint(0xbfb00834) = 0xeff88ce0; // watchdog_reset
+        // VPint(0xbfb00834) |= ((1<<26) | (1<<27) | (1<<29)); // pcie_reset_link()
+        // #define EPHY_RST                        (1<<24)
+        // #define ESW_RST                            (1<<23)
+        // #define FE_RST                            (1<<21)
+        // #define QDMA1_RST                    (1<<1)
+        // #define QDMA2_RST                    (1<<2)
+        // /* Reset Control Register */
+        // #define RALINK_I2S1_RST            (1<<0)
+        // #define RALINK_FE_QDMA_LAN_RST        (1<<1)
+        // #define RALINK_FE_QDMA_WAN_RST        (1<<2)
+        // #define RALINK_PCM2_RST            (1<<4)
+        // #define RALINK_PTM_MAC_RST        (1<<5)
+        // #define RALINK_CRYPTO_RST        (1<<6)
+        // #define RALINK_SAR_RST            (1<<7)
+        // #define RALINK_TIMER_RST        (1<<8)
+        // #define RALINK_BONDING_RST        (1<<10)
+        // #define RALINK_PCM1_RST            (1<<11)
+        // #define RALINK_UART_RST            (1<<12)
+        // #define RALINK_PIO_RST            (1<<13)
+        // #define RALINK_DMA_RST            (1<<14)
+        // #define RALINK_I2C_RST            (1<<16)
+        // #define RALINK_I2S2_RST            (1<<17)
+        // #define RALINK_SPI_RST            (1<<18)
+        // #define RALINK_UARTL_RST        (1<<19)
+        // #define RALINK_FE_RST            (1<<21)
+        // #define RALINK_UHST_RST            (1<<22)
+        // #define RALINK_ESW_RST            (1<<23)
+        // #define RALINK_SFC2_RST            (1<<25)
+        // #define RALINK_PCIE0_RST        (1<<26)
+        // #define RALINK_PCIE1_RST        (1<<27)
+        // #define RALINK_PCIEHB_RST        (1<<29)
+        //
+        // --- 0xbfb00838 - 0xbfb0085c -- unused
+        //
+        // --- 0xbfb00860 -- IO Muxer on non isEN751221() boards, instead of 0xbfa20104
+        // #define CR_GPIO_SSR   0xBFB00860
+        // #define TOP_CSR_GPIO_SHARE        0xbfb00860
+        //
+        // --- 0xbfb00864 -- PBUS (for external switch, not relevant to isEN751221)
+        // #define TXDSP0_PADDR_START_BASE 0xbfb00864
+        //
+        // --- 0xbfb00868 - 0xbfb00928 -- unused
+        //
+        // --- 0xbfb0092c -- Enable Bus Timeout Interrupts
+        // #define CR_BUSTIMEOUT_SWITCH     (CR_AHB_BASE + 0x92c)
+        // regWrite32(CR_BUSTIMEOUT_SWITCH, 0xfdbfffff);//switch off usb phy(bit22/bit25) control because hw issue
+        // Appears to have the same bit layout as the reset controller.
+        //
+        // --- 0xbfb00930 - 0xbfb00954 -- unused
+        //
+        // --- 0xbfb00958 -- Enable PBUS access to FE memory
+        // #define    SHARE_FEMEM_SEL    0xBFB00958
+        // //Enable pbus access FE memory
+        // la      v0, SHARE_FEMEM_SEL
+    };
+
+    smc: smc@1fb10000 {
+        // #define CR_SMC_BASE           0xBFB10000
+        description = "SRAM/FLASH/ROM Controller Operation Registers";
+        status = "disabled";
+        reg = <0x1FB10000 0x10000>;
+    };
+
+    dmc: dmc@1fb20000 {
+        description = "DDR Memory Controller";
+        status = "disabled";
+        reg = <0x1fb20000 0x10000>;
+        // #define RALINK_MEMCTRL_BASE        0xBFB20000
+        // #define CR_DMC_BASE         0xBFB20000
+        // VPint(0xbfb20000) |= (1<<12); //set ddr to self refresh mode. 
+        // VPint(0xbfb20004) &= ~(1<<15);
+        // VPint(0xbfb200e4) &= ~(1<<2);
+        // dramc.h
+        // #define DRAMC0_BASE            0xbfb20000
+    };
+
+    gdma: gdma@1fb30000 {
+        // #define RALINK_GDMA_BASE        0xBFB30000
+        // #define CR_GDMA_BASE         0xBFB30000
+        // #define TC_GDMA_BASE         0xBFB30000
+        // _nand_dma_sync (gdma.c)
+        // gdmacopy() (tcsyscmd.c)
+        compatible = "econet,en7526-gdma", "ralink,rt305x-gdma";
+        reg = <0x1fb30000 0x100>;
+
+        // resets = <&rstctrl 14>;
+        // reset-names = "dma";
+
+        interrupt-parent = <&intc>;
+        interrupts = <10>;
+
+        #dma-cells = <1>;
+        #dma-channels = <8>;
+        #dma-requests = <4>;
+
+        //status = "disabled";
+    };
+
+    intc: intc@1fb40000 {
+        // The bootloader on these systems puts the interrupt controller
+        // into EIC / VI mode so CPU hardware interrupts are routed to the
+        // INTC, which handles masking and priority and then routes them back to
+        // the CPU where they appear as CPU interrupts with the 6 interrupt
+        // lines repurposed to represent a number 0-63.
+        //
+        // The only exception is software interrupts, which come through the same
+        // way but must be masked in the CPU. Since we're single core, we can
+        // safely ignore them.
+        //
+        // Therefore we do not need a CPU interrupt controller at all because
+        // cascading is done entirely in hardware.
+        //
+        compatible = "econet,en7526-intc";
+        reg = <0x1fb40000 0x100>;
+
+        interrupt-controller;
+
+        interrupt-parent = <&cpuintc>;
+        interrupts = <2>;
+
+        econet,intc-registers = <0x4 0x50>;
+        econet,route-interrupts = [
+            03 00
+            04 00
+            08 01
+            09 01
+        ];
+
+        #interrupt-cells = <1>;
+
+
+
+        // This is a custom interrupt controller for the tc3162
+        //
+        // #define CR_INTC_BASE    0xBFB40000   
+        // #define CR_INTC_IMR     (CR_INTC_BASE+0x0004)
+        // #define CR_INTC_IMR_1   (CR_INTC_BASE+0x0050)
+        // #define IMR1    0xBFB40050
+    };
+
+    mac: mac@1fb50000 {
+        description = "Ethernet MAC and Switch";
+        reg = <0x1fb50000 0x10000>;
+        // #define CR_MAC_BASE         0xBFB50000
+        // #define RALINK_FRAME_ENGINE_BASE     0xBFB50000
+        // #define CR_GMAC_BASE         0xBFB50000
+        // #define FE_BASE                 0xBFB50000
+        //
+        // gsw = giga switch, this is an MT7530 which should be the easy part.
+        // #define GSW_BASE             0xBFB58000
+        //
+        // https://github.com/gchmiel/en7512_kernel5/blob/master/eth.md
+
+        // ????
+        // compatible = "airoha,en7581-eth";
+        // reg = <0 0x1fb50000 0 0x2600>,
+        //       <0 0x1fb54000 0 0x2000>,
+        //       <0 0x1fb56000 0 0x2000>;
+        // reg-names = "fe", "qdma0", "qdma1";
+    };
+
+    xpon: xpon@1fb60000 {
+        // Reading bfb6[0-7][23ab]00  hangs the machine.
+        // It looks like the actual range is bfb60000 - bfb68000, fo 0x2000 length
+        compatible = "econet,en7526-xpon";
+        reg = <0x1fb60000 0x10000>;
+        // #define REG_EPON_BASE        0xbfb66000
+        // #define CONFIG_GPON_BASE_ADDR                    (0x1FB60000)
+    };
+
+    usb: usb@1fb70000 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        compatible = "generic-ehci";
+        reg = <0x1fb70000 0x1000>;
+        // #define CR_USB_BASE     0xBFB70000
+        //
+        // hardware_reset()
+        // VPint(CR_USB_SYS_CTRL_REG) |= (1 << 31);
+        //
+
+        interrupt-parent = <&intc>;
+        interrupts = <17>; // USB20_INT
+
+        phys = <&usbphy>;
+        phy-names = "usb";
+
+        ehci_port1: port@1 {
+            reg = <1>;
+            #trigger-source-cells = <0>;
+        };
+    };
+
+    pci: pci@1fb80000 {
+        compatible = "econet,en7526-pci";
+        reg = <0x1fb80000 0x10000>;
+        // #define HOST_BRIDGE_BASE     0xBFB80000
+        // 
+        // Init:
+        // tmp = regRead32(CR_AHB_PCIC);
+        // regWrite32(CR_AHB_PCIC, (tmp & ~(1<<29)));
+        // mdelay(5);
+        // tmp = regRead32(CR_AHB_PCIC);
+        // regWrite32(CR_AHB_PCIC, (tmp & ~(1<<30)));
+        // mdelay(5);
+        // tmp = regRead32(CR_AHB_PCIC);
+        // regWrite32(CR_AHB_PCIC, (tmp | (1<<29)));
+        // mdelay(5);
+        // tmp = regRead32(CR_AHB_PCIC);
+        // regWrite32(CR_AHB_PCIC, (tmp | (1<<30)));
+        // mdelay(5);
+        //
+        // This will be custom, need to port from kernel49
+        // TODO: Compare to rt2880-pci
+    };
+
+    // I believe this is unused, it exists in 2.2 but only if TCSUPPORT_NEW_SPIFLASH is false.
+    // It does not exist in 4.9 at all.
+    // spi: spi@1fbc0000 {
+    //     compatible = "econet,en7526-spi";
+    //     // #define CR_SPI_BASE         0xBFBC0000
+    //     reg = <0x1fbc0000 0x10000>;
+    // };
+
+
+    // dump bfb6ffff 1 - confirm hang
+    // dump bfb61000 1 - no hang -> dump bfb60fff 1
+    // dump bfb600ff 1
+    // dump bfb6000f 1
+    // dump bfb60000 1
+    // end at bfc00000
+
+    // dump bfb60400 fc00
+
+    // dump bfb60c00 f400
+
+    // dump bfb68000 8000
+
+    // dump bfb70000 90000
+
+    // dump bfbe0000 20000
+
+    /*
+
+telecomadmin
+nE7jA%5m
+
+*/
+
+    pcm: pcm@1fbd0000 {
+        // Reading 0xbfbd5000 or 0xbfbdf000 hangs the machine
+        compatible = "econet,en7526-pcm";
+        reg = <0x1fbd0000 0x10000>;
+        // #define OPERATIONAL_BASE                 0xbfbd0000
+        // Missing source code, but similar to pcm_slic
+    };
+
+    // 0x1fbe0000 - a cpuclock on 1004k
+
+    // ?????
+    // syscon@1fbe3400 {
+    //     compatible = "airoha,en7581-pbus-csr", "syscon";
+    //     reg = <0x0 0x1fbe3400 0x0 0xff>;
+    // };
+
+    uart: serial@1fbf0000 {
+        compatible = "ns16550";
+        reg = <0x1fbf0000 0x30>;
+        reg-io-width = <4>;
+        reg-shift = <2>;
+        interrupt-parent = <&intc>;
+        interrupts = <0>;
+        clock-frequency = <1843200>;
+        status = "disabled";
+        // UART_INT,        //0     IPL10
+        // HSUART_INT,        //16    IPL23
+    };
+
+    // timer: timer@1fbf0100 {
+    //     // This is similar, but not identical, to the rt2880-timer
+    //     // RT2880 timer val starts at 0x18 and steps by 0x10
+    //     // #define PBUS_TIMER_VAL(n)        ((RALINK_TIMER_BASE) + 0x10 * (n) + 0x18)
+    //     // This timer starts at 8 and steps by 8
+    //     // #define PBUS_TIMER_CVR(n)              (0xbfbf0108 + (n) * 8)
+
+    //     compatible = "econet,timer-en75";
+    //     reg = <0x1fbf0100 0x100>;
+
+    //     clocks = <&scu 2>;
+
+    //     interrupt-parent = <&intc>;
+    //     interrupts = <1>;
+    // };
+
+    // watchdog: watchdog@120 {
+    //     compatible = "ralink,rt2880-wdt";
+    //     reg = <0x120 0x10>;
+
+    //     clocks = <&sysc 8>;
+
+    //     resets = <&sysc 8>;
+    //     reset-names = "wdt";
+
+    //     interrupt-parent = <&intc>;
+    //     interrupts = <1>;
+    // };
+    
+    gpio0: gpio@1fbf0200 {
+
+        // 2 = LED_XPON_STATUS
+
+        // 4 = LED_INTERNET_STATUS
+        // 5 = flash write protect off
+        // 6 = PCI bonding slave
+
+        // 8 = GPON
+
+        // 11 = LED_USB_STATUS
+        // 12 = Ethernet LED
+
+        // 15 = LED PON
+        // 16 = LED_PHY_TX_POWER_DISABLE
+        // 17 = LED Alarm
+        // 18 = MT6306_RST_GPIO
+        // 19 = LED_PIN_FXS1
+
+        // 21 = power LED
+
+        // 24 = LED_XPON_LOS_ON_STATUS
+        // 25 = MDC_GPIO_DEF // also dmt3095 power on
+        // 26 = MDIO_GPIO_DEF // changed exModeMDIOGpioConf
+
+        // 0xbfbf021c	./tclinux_phoenix/linux-2.6.36/arch/mips/pci/pci-tc3162u.c	1320	 tmp = regRead32(0xbfbf021c);
+        // 0xbfbf021c	./tclinux_phoenix/linux-2.6.36/arch/mips/pci/pci-tc3162u.c	1321	 regWrite32(0xbfbf021c, (tmp & (~((1<<12) | (1<<13)))));
+
+        compatible = "airoha,en7523-gpio";
+        reg = <0x1fbf0204 0x4>, // CR_GPIO_DATA
+              <0x1fbf0200 0x4>, // CR_GPIO_CTRL
+              <0x1fbf0220 0x4>, // CR_GPIO_CTRL1
+              <0x1fbf0214 0x4>; // CR_GPIO_ODRAIN
+        gpio-controller;
+        #gpio-cells = <2>;
+    };
+
+    gpio_suspected: gpio@1fbf0230 {
+        compatible = "airoha,en7523-gpio";
+        reg = <0x1fbf0234 0x4>, // CR_GPIO_DATA
+              <0x1fbf0230 0x4>, // CR_GPIO_CTRL
+              <0x1fbf0250 0x4>, // CR_GPIO_CTRL1
+              <0x1fbf0244 0x4>; // CR_GPIO_ODRAIN
+        gpio-controller;
+        #gpio-cells = <2>;
+    // 0xbfbf0234	./tclinux_phoenix/linux-2.6.36/arch/mips/pci/pci-tc3162u.c	1318	 tmp = regRead32(0xbfbf0234);
+    // 0xbfbf0234	./tclinux_phoenix/linux-2.6.36/arch/mips/pci/pci-tc3162u.c	1319	 regWrite32(0xbfbf0234, (tmp & ~(1<<6)));
+    };
+
+    gpio1: gpio@1fbf0260 {
+        // 42 = LED_PIN_LAN1
+        // 43 = LED_PIN_LAN2
+
+        // Mysterious LED GPIOs above 64
+        // 65 = LED_WLAN_WPS_STATUS
+        // 78 = LED_VOIP_HOOK1_STATUS
+        // 79 = LED_WLAN_RADIO - INPUT
+        // 77 = LED_WLAN_WPS - INPUT
+
+        compatible = "airoha,en7523-gpio";
+        reg = <0x1fbf0270 0x4>, // CR_GPIO_DATA1
+              <0x1fbf0260 0x4>, // CR_GPIO_CTRL2
+              <0x1fbf0264 0x4>, // CR_GPIO_CTRL3
+              <0x1fbf0278 0x4>; // CR_GPIO_ODRAIN1
+        gpio-controller;
+        #gpio-cells = <2>;
+    };
+
+    uart2: serial@1fbf0300 {
+        // Unclear if this is connected to anything.
+
+        // compatible = "airoha,en7523-uart";
+        // reg = <0x1fbf0300 0x30>;
+        // reg-io-width = <4>;
+        // reg-shift = <2>;
+        // interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
+        // clock-frequency = <7372800>;
+
+        status = "disabled";
+        // UART_INT,        //0     IPL10
+        // HSUART_INT,        //16    IPL23
+    };
+
+    // #define CR_HSUART_BASE     0xBFBF0300
+    // #define CR_UART2_BASE     0xBFBF0300
+
+    cpu_timer: cpu_timer@1fbf0400 {
+        compatible = "econet,timer-en75";
+        reg = <0x1fbf0400 0x100>;
+
+        interrupt-parent = <&intc>;
+        interrupts = <31>, <30>;
+        // On 1004K we also need register <0x1fbe0000 0x100> for the second timer
+    };
+
+    // 0xbfbf0500
+    // #define  SIM_base        (0xbfbf0500)
+
+    // 0xbfbf8214 -> efuse
+    // #define EFUSE_VERIFY_DATA0 (0xBFBF8214)
+    // efuse_extreme_mode = mdio_reg_read(skfd, ifr, 0xBFBF8214/*EFUSE_EXTREME_MODE_REG*/);
+
+    // 
+};

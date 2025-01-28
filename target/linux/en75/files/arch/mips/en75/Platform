@@ -1,0 +1,5 @@
+#
+# EcoNet EN75xx with "free bootbase"
+#
+cflags-$(CONFIG_ECONET_EN75)	+= -DDEBUG=1 -Wno-error
+load-$(CONFIG_ECONET_EN75)	+= 0xffffffff80002000
