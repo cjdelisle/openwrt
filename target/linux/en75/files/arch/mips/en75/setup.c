@@ -154,6 +154,9 @@ static __init void en75_of_time_init(void)
 		mips_hpt_frequency = clk_get_rate(clk) / 2;
 		clk_put(clk);
 	}
+	if (!mips_hpt_frequency) {
+		mips_hpt_frequency = 225000000;
+	}
 }
 
 void __init plat_time_init(void)

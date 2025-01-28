@@ -9,6 +9,18 @@
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
 
+#define   BIT_PCI_PERSTOUT		BIT(29)
+#define   BIT_PCI_PERSTOUT1		BIT(26)
+#define   BIT_PCI_REFCLK_EN1		BIT(22)
+
+#define   BIT_RESET_PCIEHB		BIT(29)
+#define   BIT_RESET_PCIE1		BIT(27)
+#define   BIT_RESET_PCIE2		BIT(26)
+
+#define   SYSINFO_BUSCLK_MHZ(word)	(((word) & GENMASK(19, 10)) >> 10)
+
+#define   CLOCKRATE_CPUTIMER_MHZ	200
+
 // Clocks
 enum clocks {
 	EN75_CLK_BUS,
@@ -18,7 +30,7 @@ enum clocks {
 	EN75_NUM_CLOCKS,
 };
 
-static const char* clock_names[] = {
+static const char *const clock_names[] = {
 	[EN75_CLK_BUS] = "bus",
 	[EN75_CLK_CPU] = "cpu",
 	[EN75_CLK_PCIE] = "pcie",
@@ -36,27 +48,35 @@ enum en75_register {
 #define BANK0 0
 #define BANK1 (1U<<31)
 static u32 en75_regs[NUM_REGS] = {
-	[REG_SYSINFO] = 	BANK1 | 0x284,
-	[REG_RESET_CONTROL] = 	BANK1 | 0x88,
-	[REG_PCI_CONTROL] = 	BANK1 | 0x834,
+	[REG_SYSINFO]		= BANK1 | 0x284,
+	[REG_RESET_CONTROL]	= BANK1 | 0x088,
+	[REG_PCI_CONTROL]	= BANK1 | 0x834,
 };
 
-struct en75_syscon {
+static const struct en75_syscon {
+	const struct clk_ops pcie_gate_ops;
+	const struct clk_init_data pcie_init;
+} en75_syscon;
+
+static struct {
 	struct regmap *maps[2];
-	struct clk_hw pci_clk;
 	struct clk_hw_onecell_data *clk_data;
-};
+} en75_syscon_rai __ro_after_init;
 
-static struct en75_syscon en75_syscon;
+static struct {
+	struct clk_hw pci_clk;
+} en75_syscon_m;
 
+// Main
 
 static inline u32 en75_rreg(enum en75_register reg)
 {
 	const u32 r = en75_regs[reg];
 	u32 out = 0;
+
 	BUG_ON(
 		regmap_read(
-			en75_syscon.maps[r >> 31],
+			en75_syscon_rai.maps[r >> 31],
 			(r & ~(1U << 31)),
 			&out
 		)
@@ -67,9 +87,10 @@ static inline u32 en75_rreg(enum en75_register reg)
 static inline void en75_wreg(enum en75_register reg, u32 val, u32 mask)
 {
 	const u32 r = en75_regs[reg];
+
 	BUG_ON(
 		regmap_update_bits(
-			en75_syscon.maps[r >> 31],
+			en75_syscon_rai.maps[r >> 31],
 			(r & ~(1U << 31)),
 			mask,
 			val
@@ -77,38 +98,11 @@ static inline void en75_wreg(enum en75_register reg, u32 val, u32 mask)
 	);
 }
 
-#define   BIT_PCI_PERSTOUT		BIT(29)
-#define   BIT_PCI_PERSTOUT1		BIT(26)
-#define   BIT_PCI_REFCLK_EN1		BIT(22)
-
-#define   BIT_RESET_PCIEHB		BIT(29)
-#define   BIT_RESET_PCIE1		BIT(27)
-#define   BIT_RESET_PCIE2		BIT(26)
-
-#define   SYSINFO_BUSCLK_MHZ(word) 	(((word) & GENMASK(19, 10)) >> 10)
-
-#define   CLOCKRATE_CPUTIMER_MHZ 	200
-
-// Fixed Clocks
-
 static inline u32 en75_bus_clock_hz(void)
 {
 	u32 si = en75_rreg(REG_SYSINFO);
-	return SYSINFO_BUSCLK_MHZ(si) * 1000 * 1000;
-}
 
-static int en75_register_fixed_clock(
-	struct en75_syscon *sysc,
-	enum clocks id,
-	u32 rate
-) {
-	struct clk_hw *hw = clk_hw_register_fixed_rate(NULL, clock_names[id], NULL, 0, rate);
-	if (IS_ERR(hw)) {
-		pr_err("Failed to register bus %s: %ld\n", clock_names[id], PTR_ERR(hw));
-		return PTR_ERR(hw);
-	}
-	sysc->clk_data->hws[id] = hw;
-	return 0;
+	return SYSINFO_BUSCLK_MHZ(si) * 1000 * 1000;
 }
 
 // PCI
@@ -155,76 +149,98 @@ static int en75_pci_prepare(struct clk_hw *hw)
 	return 0;
 }
 
-static const struct clk_ops pcie_gate_ops = {
-	.is_enabled = en75_pci_is_enabled,
-	.prepare = en75_pci_prepare,
-	.unprepare = en75_pci_unprepare,
-};
-static const struct clk_init_data pcie_init = {
-	.name = "pcie",
-	.ops = &pcie_gate_ops,
+static const struct en75_syscon en75_syscon = {
+	.pcie_gate_ops = {
+		.is_enabled = en75_pci_is_enabled,
+		.prepare = en75_pci_prepare,
+		.unprepare = en75_pci_unprepare,
+	},
+	.pcie_init = {
+		.name = "pcie",
+		.ops = &en75_syscon.pcie_gate_ops,
+	},
 };
 
-static int en75_register_pcie_clk(struct en75_syscon *sysc, struct device_node *node)
+// Init
+
+static int __init en75_register_pcie_clk(struct device_node *const node)
 {
-	sysc->pci_clk.init = &pcie_init;
-	en75_pci_unprepare(&sysc->pci_clk);
+	int ret;
 
-	const int ret = of_clk_hw_register(node, &sysc->pci_clk);
+	en75_syscon_m.pci_clk.init = &en75_syscon.pcie_init;
+	en75_pci_unprepare(&en75_syscon_m.pci_clk);
+
+	ret = of_clk_hw_register(node, &en75_syscon_m.pci_clk);
 	if (ret) {
 		pr_err("PCI clock: clk_hw_register() -> %d\n", ret);
 		return ret;
 	}
 
-	sysc->clk_data->hws[EN75_CLK_PCIE] = &sysc->pci_clk;
+	en75_syscon_rai.clk_data->hws[EN75_CLK_PCIE] = &en75_syscon_m.pci_clk;
 
 	return 0;
 }
 
-static void en75_register_clocks(struct en75_syscon *sysc, struct device_node *node)
+static int __init en75_register_fixed_clock(const enum clocks id, const u32 rate)
 {
-	const u32 bus_rate = en75_bus_clock_hz();
-	pr_info("%pOFn: Detected bus clock: %u Mhz\n", node, bus_rate / 1000 / 1000);
-	en75_register_fixed_clock(sysc, EN75_CLK_BUS, bus_rate);
-	en75_register_fixed_clock(sysc, EN75_CLK_CPU, bus_rate * 4);
-	en75_register_fixed_clock(sysc, EN75_CLK_TIMER, CLOCKRATE_CPUTIMER_MHZ * 1000 * 1000);
-	en75_register_pcie_clk(sysc, node);
+	struct clk_hw *const hw = clk_hw_register_fixed_rate(NULL, clock_names[id], NULL, 0, rate);
+
+	if (IS_ERR(hw)) {
+		pr_err("Failed to register bus %s: %ld\n", clock_names[id], PTR_ERR(hw));
+		return PTR_ERR(hw);
+	}
+	en75_syscon_rai.clk_data->hws[id] = hw;
+	return 0;
 }
 
-static void __init en75_clk_init(struct device_node *node)
+static void __init en75_register_clocks(struct device_node *const node)
 {
+	const u32 bus_rate = en75_bus_clock_hz();
+
+	pr_info("%pOFn: Detected bus clock: %u Mhz\n", node, bus_rate / 1000 / 1000);
+	en75_register_fixed_clock(EN75_CLK_BUS, bus_rate);
+	en75_register_fixed_clock(EN75_CLK_CPU, bus_rate * 4);
+	en75_register_fixed_clock(EN75_CLK_TIMER, CLOCKRATE_CPUTIMER_MHZ * 1000 * 1000);
+	en75_register_pcie_clk(node);
+}
+
+static void __init en75_clk_init(struct device_node *const node)
+{
+	struct regmap *scu;
+	struct regmap *chip_scu;
+
 	pr_info("%pOFn: Init\n", node);
 
-	en75_syscon.clk_data = kzalloc(
-		struct_size(en75_syscon.clk_data, hws, EN75_NUM_CLOCKS),
+	en75_syscon_rai.clk_data = kzalloc(
+		struct_size(en75_syscon_rai.clk_data, hws, EN75_NUM_CLOCKS),
 		GFP_KERNEL);
-	if (!en75_syscon.clk_data) {
+	if (!en75_syscon_rai.clk_data) {
 		pr_err("%pOFn: Could not allocate clk_data\n", node);
 		return;
 	}
 
-	struct regmap *scu = syscon_node_to_regmap(node);
+	scu = syscon_node_to_regmap(node);
 	if (IS_ERR(scu)) {
 		pr_err("%pOFn: Could not get sysc syscon regmap: %ld\n",
 			node, PTR_ERR(scu));
 		return;
 	}
 
-	struct regmap *chip_scu =
-		syscon_regmap_lookup_by_compatible("econet,en751221-chip-scu");
+	chip_scu = syscon_regmap_lookup_by_compatible("econet,en751221-chip-scu");
 	if (IS_ERR(chip_scu)) {
 		pr_err("%pOFn: Could not get chip-scu regmap: %ld\n",
 			node, PTR_ERR(chip_scu));
 		return;
 	}
 
-	en75_syscon.maps[0] = chip_scu;
-	en75_syscon.maps[1] = scu;
+	en75_syscon_rai.maps[0] = chip_scu;
+	en75_syscon_rai.maps[1] = scu;
 
-	en75_register_clocks(&en75_syscon, node);
+	en75_register_clocks(node);
 
+	en75_syscon_rai.clk_data->num = EN75_NUM_CLOCKS;
 	int r = of_clk_add_hw_provider(
-		node, of_clk_hw_onecell_get, &en75_syscon.clk_data);
+		node, of_clk_hw_onecell_get, &en75_syscon_rai.clk_data);
 	if (r) {
 		pr_err("%pOFn: Could not register clock provider: %d\n", node, r);
 		return;
