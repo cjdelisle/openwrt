@@ -1,0 +1,35 @@
+From: Caleb James DeLisle <cjd@cjdns.fr>
+Subject: MIPS EN75 add ZBOOT support
+
+This enables ZBOOT and ZBOOT debugging on EN75xx MIPS platform.
+All EN75xx MIPS varients have at least one 16550 UART at 0x1fbf0000
+with one register per word, and all are big endian so require a 3
+byte offset.
+
+Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
+---
+--- a/arch/mips/boot/compressed/uart-16550.c
++++ b/arch/mips/boot/compressed/uart-16550.c
+@@ -23,6 +23,11 @@
+ #define PORT(offset) (CKSEG1ADDR(INGENIC_UART_BASE_ADDR) + (4 * offset))
+ #endif
+ 
++#ifdef CONFIG_ECONET_EN75
++#define EN75_UART_BASE	0x1fbf0003
++#define PORT(offset) (CKSEG1ADDR(EN75_UART_BASE) + (4 * offset))
++#endif
++
+ #ifndef IOTYPE
+ #define IOTYPE char
+ #endif
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -409,6 +409,8 @@ config ECONET_EN75
+ 	select SYS_SUPPORTS_32BIT_KERNEL
+ 	select SYS_SUPPORTS_MIPS16
+ 	select USE_OF
++	select SYS_SUPPORTS_ZBOOT
++	select SYS_SUPPORTS_ZBOOT_UART16550
+ 
+ config MACH_JAZZ
+ 	bool "Jazz family of machines"

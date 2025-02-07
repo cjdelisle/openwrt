@@ -17,7 +17,7 @@
 
 #define EN75_INTC_IRQ_COUNT	40
 
-// Todo should be in the device tree
+// TODO should be in the device tree
 #define SI_TIMER1_INT		30
 #define SI_TIMER_INT		31
 
@@ -25,9 +25,10 @@
 static_assert(EN75_INTC_IRQ_COUNT < INTC_NO_ROUTE);
 
 enum register_names {
-	MASK0,
-	MASK1,
-	REG_COUNT,
+	REG_MASK0,
+	REG_MASK1,
+
+	NUM_REGS,
 };
 
 // Data
@@ -45,12 +46,12 @@ static struct {
 	struct irq_domain *parent_domain;
 	struct irq_domain *self_domain;
 	u8 interrupt_routes[EN75_INTC_IRQ_COUNT];
-	u32 registers[REG_COUNT];
+	u32 registers[NUM_REGS];
 } en75_intc_rai __ro_after_init = {
 	// Register default values
 	.registers = {
-		[MASK0] = 0x04,
-		[MASK1] = 0x50,
+		[REG_MASK0] = 0x04,
+		[REG_MASK1] = 0x50,
 	}
 };
 
@@ -62,14 +63,13 @@ static inline void en75_do_IRQ(const irq_hw_number_t hwirq)
 {
 	const u8 phwirq = en75_intc_rai.interrupt_routes[hwirq];
 
-	if (phwirq != INTC_NO_ROUTE) {
-		pr_info("Oy, forwarded interrupt! %lu -> %d (we are CPU %d)\n",
-			hwirq, phwirq, smp_processor_id());
-		dump_stack();
+	if (hwirq != SI_TIMER_INT && hwirq != SI_TIMER1_INT && phwirq == INTC_NO_ROUTE)
+		pr_info("Interrupt on %ld\n", hwirq);
+
+	if (phwirq != INTC_NO_ROUTE)
 		do_domain_IRQ(en75_intc_rai.parent_domain, phwirq);
-	} else {
+	else
 		do_domain_IRQ(en75_intc_rai.self_domain, hwirq);
-	}
 }
 
 
@@ -109,26 +109,50 @@ static void en75_chmask(const u32 hwirq, const bool unmask)
 	const u32 mask = BIT(hwirq - (reg ? 33 : 1));
 	const u32 bit = (unmask) ? mask : 0;
 
-	pr_info("%s: %08x %08x %08x\n", __func__, reg, bit, mask);
-
 	en75_wreg(reg, bit, mask);
 }
 
 static void en75_intc_mask(struct irq_data *const d)
 {
+	pr_info("Masking IRQ %ld on CPU %d\n", d->hwirq, smp_processor_id());
 	en75_chmask(d->hwirq, false);
 }
 
 static void en75_intc_unmask(struct irq_data *const d)
 {
+	if (d->hwirq == SI_TIMER_INT && smp_processor_id() != 0) {
+		pr_info("Ignore request to unmask IRQ %ld on CPU %d\n", d->hwirq, smp_processor_id());
+		return;
+	} else if (d->hwirq == SI_TIMER1_INT && smp_processor_id() != 1) {
+		pr_info("Ignore request to unmask IRQ %ld on CPU %d\n", d->hwirq, smp_processor_id());
+		return;
+	}
+	pr_info("Unmasking IRQ %ld on CPU %d\n", d->hwirq, smp_processor_id());
 	en75_chmask(d->hwirq, true);
 }
 
 static inline void en75_mask_all(void)
 {
-	en75_wreg(MASK0, 0, ~0);
-	en75_wreg(MASK1, 0, ~0);
+	en75_wreg(REG_MASK0, 0, ~0);
+	en75_wreg(REG_MASK1, 0, ~0);
 }
+
+// static inline void en75_set_affinity(u32 hwirq) {
+// 	/* change IRQ binding to VPE0 or VPE1 */
+// 	const u32 regnum = (32 - hwirq) / 4;
+
+// 	// irq 1,  2,  3,  4
+// 	// bit 4, 12, 20, 28
+// 	const u32 offset = ((hwirq - 1) % 4) * 8 + 4;
+
+// 	// tmp = regRead32((CR_INTC_IVSR0 + regnum * 4));
+// 	// if (irq_vpe0 >= irq_vpe1)
+// 	// 	tmp &= ~(1<<offset2);
+// 	// else
+// 	// 	tmp |= (1<<offset2);
+// 	// regWrite32((CR_INTC_IVSR0 + regnum * 4), tmp);
+
+// }
 
 static void en75_intc_from_parent(struct irq_desc *const desc)
 {
@@ -140,6 +164,13 @@ static int en75_intc_map(struct irq_domain *const d, const u32 irq, const irq_hw
 {
 	int ret;
 
+	if (hwirq >= EN75_INTC_IRQ_COUNT) {
+		pr_err("%s: hwirq %lu out of range\n", __func__, hwirq);
+		return -EINVAL;
+	} else if (en75_intc_rai.interrupt_routes[hwirq] != INTC_NO_ROUTE) {
+		pr_err("%s: hwirq %lu is forwarded\n", __func__, hwirq);
+		return -EINVAL;
+	}
 	if (hwirq == SI_TIMER1_INT || hwirq == SI_TIMER_INT) {
 		irq_set_chip_and_handler(
 			irq, &en75_intc.chip, handle_percpu_devid_irq);
@@ -239,12 +270,6 @@ static inline int __init en75_prepare_forwarded_irq(
 	if (en75_intc_rai.interrupt_routes[hwirq] == INTC_NO_ROUTE)
 		return 0;
 
-	irq = irq_create_mapping(domain, hwirq);
-	if (!irq)
-		return -EINVAL;
-
-	irq_set_chip_and_handler(irq, &en75_intc.chip, handle_bad_irq);
-	irq_set_status_flags(irq, IRQ_NOAUTOEN | IRQ_NOREQUEST | IRQ_NOTHREAD);
 	set_vi_handler(hwirq, en75_intc.dispatch_table[hwirq]);
 	en75_chmask(hwirq, true);
 
@@ -266,7 +291,7 @@ static int __init en75_intc_of_init(
 	pr_info("%pOF: Init\n", node);
 
 	if (!of_property_read_u32_array(node, "econet,intc-registers",
-		en75_intc_rai.registers, REG_COUNT)) {
+		en75_intc_rai.registers, NUM_REGS)) {
 		pr_info("%pOF: using econet,intc-registers from devicetree\n", node);
 	}
 
@@ -327,6 +352,10 @@ static int __init en75_intc_of_init(
 
 	irq_set_chained_handler_and_data(
 		irq, en75_intc_from_parent, en75_intc_rai.self_domain);
+
+	// TODO: We don't really "own" these registers, we should find a better way
+	write_c0_status((read_c0_status() & ~ST0_IM) |
+			(STATUSF_IP0 | STATUSF_IP1));
 
 	return 0;
 

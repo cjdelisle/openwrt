@@ -5,55 +5,29 @@ define Target/Description
 	Build firmware images for EN75xx MIPS based boards.
 endef
 
-# define Device/Default
-# 	PROFILES = Bare Kernel $$(DEVICE_NAME)
-# 	KERNEL_NAME := Image
-# 	KERNEL = kernel-bin | append-dtb
-# 	DEVICE_DTS_DIR := $(DTS_DIR)
-# 	IMAGES := kernel.bin
-# 	IMAGE/kernel.bin := append-kernel
-# endef
-
-# define Image/Build
-# 	$(call Image/Build/$(1),$(1))
-# endef
-
-# define Image/Build/Initramfs
-# 	$(call Image/Build/$(1))
-# 	cp $(KDIR)/vmlinux-initramfs $(BIN_DIR)/openwrt-$(BOARD)-initramfs.bin
-# endef
-
-# define Image/Build/Prepare
-# 	cp $(KDIR)/vmlinux $(BIN_DIR)/openwrt-$(BOARD)-barekernel.bin
-# endef
-
-# define Image/Build/Initramfs
-# 	$(call Image/Build/$(1))
-# 	cp $(KDIR)/vmlinux $(BIN_DIR)/openwrt-$(BOARD)-barekernel.bin
-# endef
-
-#  PROFILES := Default
-
-define Device/en751221_bare_kernel
-  KERNEL_NAME := vmlinux
-  KERNEL := kernel-bin
-  IMAGES := linux.bin
-  IMAGE/linux.bin := kernel-bin | append-dts
-  DEVICE_VENDOR := Generic
-  DEVICE_MODEL := EN751221 Bare Kernel
-  DEVICE_DTS := en751221-generic
-  DEVICE_DTS_DIR := ../dts
+define Build/tclinux-trx
+  ./tclinux-trx.sh $@ $(IMAGE_ROOTFS) $(VERSION_DIST)-$(REVISION) > $@.new
+	mv $@.new $@
 endef
 
-# define Device/en751221_bare_kernel
-# 	DEVICE_VENDOR := Generic
-# 	DEVICE_MODEL := EN751221 Bare Kernel
-# 	DEVICE_DTS := en751221-generic
-# 	DEVICE_DTS_DIR := ../dts
-# 	KERNEL := kernel-bin | append-dtb
-# 	DEVICE_DESCRIPTION := Linux kernel and device tree ONLY (for testing). \
-# 		No filesystem included.
-# endef
-TARGET_DEVICES += en751221_bare_kernel
+# tclinux bootloader requires LZMA, BUT only provides 7.5MB of space
+# to decompress into. So we use vmlinuz and decompress twice.
+define Device/Default
+  DEVICE_DTS_DIR := ../dts
+  KERNEL_SIZE := 7480k
+  KERNEL_NAME := vmlinuz.bin
+  KERNEL := kernel-bin | append-dtb
+  IMAGES += tclinux.trx kernel.bin
+  IMAGE/tclinux.trx := append-kernel | lzma | tclinux-trx
+  IMAGE/kernel.bin := append-kernel
+endef
+
+define Device/smartfiber_xp8421-b
+  DEVICE_VENDOR := SmartFiber
+  DEVICE_MODEL := XP8421-B
+  DEVICE_DTS := en751221-generic
+endef
+
+TARGET_DEVICES += smartfiber_xp8421-b
 
 $(eval $(call BuildImage))

@@ -15,8 +15,98 @@
 		reg =	<0x00002000 0x1bffe000>, // Low memory 448 MB
 			<0x9c000000 0x04002000>; // High memory 64 MB
 	};
+
+	chosen {
+		// Prevent the BMT/BBT from ever touching the bootloader.
+		bootargs = "console=ttyS0,115200";
+	};
 };
 
-&cpus {
-	frequency = <900000000>; // 900mhz
+&cpu_clock {
+	clock-frequency = <900000000>; // 900mhz
+};
+
+&uart {
+	status = "okay";
+};
+
+&nand {
+	status = "okay";
+	econet,bmt;
+	// econet,assert-reserve-size = <163>;
+	// econet,can-write-factory-bbt;
+	// econet,factory-badblocks = <3 1536 1537>;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		partition@0 {
+			label = "bootloader";
+			reg = <0x0 0x40000>;
+			read-only;
+		};
+
+		// flash 40000 80020000 40000
+		partition@40000 {
+			label = "romfile";
+			reg = <0x40000 0x40000>;
+			read-only;
+		};
+
+		partition@80000 {
+			label = "tclinux";
+			reg = <0x80000 0x1400000>;
+			read-only;
+			econet,enable-remap;
+		};
+
+		// Nested inside of tclinux
+		partition@80100 {
+			label = "kernel_rootfs";
+			reg = <0x80100 0x13fff00>;
+			read-only;
+		};
+
+		partition@1480000 {
+			label = "tclinux_alt";
+			reg = <0x1480000 0x1400000>;
+			read-only;
+			// econet,enable-remap;
+		};
+
+		// Nested inside of tclinux_alt
+		partition@1480100 {
+			label = "kernel_rootfs_alt";
+			reg = <0x1480100 0x13fff00>;
+			read-only;
+		};
+
+		partition@2880000 {
+			label = "openjdk";
+			reg = <0x2880000 0x2000000>;
+			linux,rootfs;
+			read-only;
+		};
+
+		partition@4880000 {
+			label = "ubifs";
+			reg = <0x4880000 0x9100000>;
+			read-only;
+		};
+
+		// Empty space here, danger, do not touch
+		// partition@d980000 {
+		// 	label = "unknown";
+		// 	reg = <0xd980000 0x4c0000>;
+		// };
+
+		partition@de40000 {
+			label = "reservearea";
+			reg = <0xde40000 0x1c0000>;
+			read-only;
+		};
+
+	};
 };

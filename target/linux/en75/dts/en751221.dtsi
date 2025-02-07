@@ -8,6 +8,18 @@
     #address-cells = <1>;
     #size-cells = <1>;
 
+    cpu_clock: cpu_clock {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <900000000>;  // 900 MHz
+    };
+
+    hpt_clock: hpt_clock {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <200000000>;  // 200 MHz
+    };
+
     cpus: cpus {
         #address-cells = <1>;
         #size-cells = <0>;
@@ -16,13 +28,13 @@
             device_type = "cpu";
             compatible = "mips,mips24KEc";
             reg = <0>;
-            clocks = <&scu 1>;
+            clocks = <&cpu_clock>;
         };
         cpu@1 {
             device_type = "cpu";
             compatible = "mips,mips24KEc";
             reg = <1>;
-            clocks = <&scu 1>;
+            clocks = <&cpu_clock>;
         };
     };
 
@@ -815,19 +827,6 @@
     };
 
     intc: intc@1fb40000 {
-        // The bootloader on these systems puts the interrupt controller
-        // into EIC / VI mode so CPU hardware interrupts are routed to the
-        // INTC, which handles masking and priority and then routes them back to
-        // the CPU where they appear as CPU interrupts with the 6 interrupt
-        // lines repurposed to represent a number 0-63.
-        //
-        // The only exception is software interrupts, which come through the same
-        // way but must be masked in the CPU. Since we're single core, we can
-        // safely ignore them.
-        //
-        // Therefore we do not need a CPU interrupt controller at all because
-        // cascading is done entirely in hardware.
-        //
         compatible = "econet,en7526-intc";
         reg = <0x1fb40000 0x100>;
 
@@ -836,24 +835,21 @@
         interrupt-parent = <&cpuintc>;
         interrupts = <2>;
 
-        econet,intc-registers = <0x4 0x50>;
         econet,route-interrupts = [
             03 00
-            04 00
-            08 01
+            04 01
+            08 00
             09 01
         ];
 
+        econet,shadow-interrupts = <
+             3  8
+             4  9
+            13 14
+            30 31
+        >;
+
         #interrupt-cells = <1>;
-
-
-
-        // This is a custom interrupt controller for the tc3162
-        //
-        // #define CR_INTC_BASE    0xBFB40000   
-        // #define CR_INTC_IMR     (CR_INTC_BASE+0x0004)
-        // #define CR_INTC_IMR_1   (CR_INTC_BASE+0x0050)
-        // #define IMR1    0xBFB40050
     };
 
     mac: mac@1fb50000 {
@@ -932,39 +928,6 @@
         // TODO: Compare to rt2880-pci
     };
 
-    // I believe this is unused, it exists in 2.2 but only if TCSUPPORT_NEW_SPIFLASH is false.
-    // It does not exist in 4.9 at all.
-    // spi: spi@1fbc0000 {
-    //     compatible = "econet,en7526-spi";
-    //     // #define CR_SPI_BASE         0xBFBC0000
-    //     reg = <0x1fbc0000 0x10000>;
-    // };
-
-
-    // dump bfb6ffff 1 - confirm hang
-    // dump bfb61000 1 - no hang -> dump bfb60fff 1
-    // dump bfb600ff 1
-    // dump bfb6000f 1
-    // dump bfb60000 1
-    // end at bfc00000
-
-    // dump bfb60400 fc00
-
-    // dump bfb60c00 f400
-
-    // dump bfb68000 8000
-
-    // dump bfb70000 90000
-
-    // dump bfbe0000 20000
-
-    /*
-
-telecomadmin
-nE7jA%5m
-
-*/
-
     pcm: pcm@1fbd0000 {
         // Reading 0xbfbd5000 or 0xbfbdf000 hangs the machine
         compatible = "econet,en7526-pcm";
@@ -975,23 +938,15 @@ nE7jA%5m
 
     // 0x1fbe0000 - a cpuclock on 1004k
 
-    // ?????
-    // syscon@1fbe3400 {
-    //     compatible = "airoha,en7581-pbus-csr", "syscon";
-    //     reg = <0x0 0x1fbe3400 0x0 0xff>;
-    // };
-
     uart: serial@1fbf0000 {
         compatible = "ns16550";
         reg = <0x1fbf0000 0x30>;
         reg-io-width = <4>;
         reg-shift = <2>;
         interrupt-parent = <&intc>;
-        interrupts = <0>;
+        interrupts = <1>;
         clock-frequency = <1843200>;
-        status = "disabled";
-        // UART_INT,        //0     IPL10
-        // HSUART_INT,        //16    IPL23
+        // status = "disabled";
     };
 
     // timer: timer@1fbf0100 {
@@ -1091,20 +1046,20 @@ nE7jA%5m
         #gpio-cells = <2>;
     };
 
-    uart2: serial@1fbf0300 {
-        // Unclear if this is connected to anything.
+    // uart2: serial@1fbf0300 {
+    //     // Unclear if this is connected to anything.
 
-        // compatible = "airoha,en7523-uart";
-        // reg = <0x1fbf0300 0x30>;
-        // reg-io-width = <4>;
-        // reg-shift = <2>;
-        // interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
-        // clock-frequency = <7372800>;
+    //     // compatible = "airoha,en7523-uart";
+    //     // reg = <0x1fbf0300 0x30>;
+    //     // reg-io-width = <4>;
+    //     // reg-shift = <2>;
+    //     // interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
+    //     // clock-frequency = <7372800>;
 
-        status = "disabled";
-        // UART_INT,        //0     IPL10
-        // HSUART_INT,        //16    IPL23
-    };
+    //     status = "disabled";
+    //     // UART_INT,        //0     IPL10
+    //     // HSUART_INT,        //16    IPL23
+    // };
 
     // #define CR_HSUART_BASE     0xBFBF0300
     // #define CR_UART2_BASE     0xBFBF0300
@@ -1114,7 +1069,9 @@ nE7jA%5m
         reg = <0x1fbf0400 0x100>;
 
         interrupt-parent = <&intc>;
-        interrupts = <31>, <30>;
+        // interrupts = <31>, <30>;
+        interrupts = <30>, <31>;
+        clocks = <&hpt_clock>;
         // On 1004K we also need register <0x1fbe0000 0x100> for the second timer
     };
 

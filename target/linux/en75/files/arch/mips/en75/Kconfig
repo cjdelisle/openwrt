@@ -26,6 +26,8 @@ choice
 		select CLKSRC_MMIO
 		select MFD_SYSCON
 		select IRQ_MIPS_CPU
+		select MIPS_FP_SUPPORT
+		select CPU_R4K_FPU
 
 		help
 		  The EN751221 family includes EN7512, RN7513, EN7521, EN7526.
@@ -33,6 +35,10 @@ choice
 
 	config SOC_EN751627
 		bool "EN751627 NOT WORKING YET"
+		select MIPS_CM
+		select MIPS_CPC
+		select MIPS_CPS
+		select MIPS_GIC
 
 		help
 		  The EN751627 family includes EN7516, EN7527, EN7528.

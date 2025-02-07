@@ -26,12 +26,22 @@
 
 // Data
 
-static DEFINE_PER_CPU(struct clock_event_device, en75_timer_pcpu_m);
+static irqreturn_t en75_cevt_interrupt(const int irq, void *const dev_id);
 
 static struct {
 	void __iomem *membase[EN75_NUM_BLOCKS];
 	u32 freq_hz;
+	int irqs[NR_CPUS];
 } en75_timer_rai __ro_after_init;
+
+static DEFINE_PER_CPU(struct clock_event_device, en75_timer_pcpu_m);
+
+// static struct irqaction en75_timer_irqaction_m = {
+// 	.handler = en75_cevt_interrupt,
+// 	.percpu_dev_id	= &en75_timer_pcpu_m,
+// 	.flags = IRQF_PERCPU | IRQF_TIMER | IRQF_SHARED,
+// 	.name = "timer-en75",
+// };
 
 // Main
 
@@ -70,8 +80,10 @@ static irqreturn_t en75_cevt_interrupt(const int irq, void *const dev_id)
 
 	BUG_ON(cpu != cpumask_first(dev->cpumask));
 
-	if (!en75_cevt_is_pending(cpu))
+	if (!en75_cevt_is_pending(cpu)) {
+		pr_debug("%s IRQ %d on CPU %d is not pending\n", __func__, irq, cpu);
 		return IRQ_NONE;
+	}
 
 	iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
 	dev->event_handler(dev);
@@ -83,7 +95,6 @@ static void en75_cevt_enable(const int cpu)
 	u32 reg = ioread32(reg_ctl(cpu));
 
 	reg |= ctl_bit_enabled(cpu);
-	pr_info("%s(%d) = %08x (%08x)\n", __func__, cpu, reg, (u32)reg_ctl(cpu));
 	iowrite32(reg, reg_ctl(cpu));
 }
 
@@ -91,10 +102,15 @@ static int en75_cevt_set_next_event(const ulong delta, struct clock_event_device
 {
 	const int cpu = cpumask_first(dev->cpumask);
 	const u32 next = ioread32(reg_count(cpu)) + delta;
+	bool is_etime;
 
 	iowrite32(next, reg_compare(cpu));
 
-	if ((s32)(next - ioread32(reg_count(cpu))) < EN75_MIN_DELTA / 2)
+	is_etime = (s32)(next - ioread32(reg_count(cpu))) < EN75_MIN_DELTA / 2;
+
+	WARN_ON_ONCE(cpu != smp_processor_id());
+
+	if (is_etime)
 		return -ETIME;
 
 	return 0;
@@ -103,23 +119,20 @@ static int en75_cevt_set_next_event(const ulong delta, struct clock_event_device
 static int en75_cevt_init_cpu(const uint cpu)
 {
 	struct clock_event_device *const cd = &per_cpu(en75_timer_pcpu_m, cpu);
-	int ret;
+	int i;
 
-	pr_info("%s: Setting up clockevent for CPU %d on IRQ %d\n", cd->name, cpu, cd->irq);
+	pr_info("%s: Setting up clockevent for CPU %d\n", cd->name, cpu);
 
-	ret = request_percpu_irq(
-		cd->irq, en75_cevt_interrupt,
-		cd->name, &en75_timer_pcpu_m);
-	if (ret < 0) {
-		pr_err("%s: IRQ %d setup failed (%d)\n", cd->name, cd->irq, ret);
-		return ret;
+	en75_cevt_enable(cpu);
+
+	for_each_possible_cpu(i) {
+		enable_percpu_irq(en75_timer_rai.irqs[i], IRQ_TYPE_NONE);
 	}
 
+	// Do this last because it synchronously configures the timer
 	clockevents_config_and_register(
 		cd, en75_timer_rai.freq_hz,
 		EN75_MIN_DELTA, EN75_MAX_DELTA);
-	en75_cevt_enable(cpu);
-	enable_percpu_irq(cd->irq, IRQ_TYPE_NONE);
 
 	return 0;
 }
@@ -132,6 +145,12 @@ static u64 notrace en75_sched_clock_read(void)
 
 // Init
 
+static inline void __init en75_cevt_dev_init(const uint cpu)
+{
+	iowrite32(0, reg_count(cpu));
+	iowrite32(U32_MAX, reg_compare(cpu));
+}
+
 static int __init en75_cevt_init(struct device_node *const np)
 {
 	int i;
@@ -139,17 +158,31 @@ static int __init en75_cevt_init(struct device_node *const np)
 	for_each_possible_cpu(i) {
 		const int irq = irq_of_parse_and_map(np, i);
 		struct clock_event_device *const cd = &per_cpu(en75_timer_pcpu_m, i);
+		int ret;
 
 		if (irq <= 0) {
 			pr_err("%pOFn: irq_of_parse_and_map failed for number %d", np, i);
 			return -EINVAL;
 		}
+
+		// ret = setup_percpu_irq(irq, &en75_timer_irqaction_m);
+		ret = request_percpu_irq(
+			irq, en75_cevt_interrupt,
+			cd->name, &en75_timer_pcpu_m);
+
+		if (ret < 0) {
+			pr_err("%pOFn: IRQ %d setup failed (%d)\n", np, irq, ret);
+			return ret;
+		}
+
 		cd->rating		= 310,
 		cd->features		= CLOCK_EVT_FEAT_ONESHOT |
 					  CLOCK_EVT_FEAT_C3STOP |
 					  CLOCK_EVT_FEAT_PERCPU;
 		cd->set_next_event	= en75_cevt_set_next_event;
-		cd->irq			= irq;
+		en75_timer_rai.irqs[i]	= irq;
+
+		en75_cevt_dev_init(i);
 	}
 
 	cpuhp_setup_state(CPUHP_AP_MIPS_GIC_TIMER_STARTING,
@@ -181,7 +214,7 @@ static int __init en75_timer_rai_init(struct device_node *const np)
 
 		cd->name = np->name;
 		cd->cpumask = cpumask_of(i);
-		cd->irq = -1;
+		en75_timer_rai.irqs[i] = -1;
 	}
 
 	// For clocksource purposes, we ALWAYS read clock zero, no matter what our CPU is.

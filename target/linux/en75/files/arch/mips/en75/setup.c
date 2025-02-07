@@ -51,6 +51,26 @@ static void __init en75_nmi_setup(void)
 	flush_icache_range((unsigned long)base, (unsigned long)base + 0x80);
 }
 
+extern const struct plat_smp_ops vsmp_smp_ops;
+static struct plat_smp_ops en75_smp_ops_rai __ro_after_init;
+
+static void rtl_init_secondary(void)
+{
+	write_c0_status((read_c0_status() & ~ST0_IM ) |
+		(STATUSF_IP0 | STATUSF_IP1));
+}
+
+static int __init en75_register_vsmp_smp_ops(void)
+{
+	if (!cpu_has_mipsmt)
+		return -ENODEV;
+
+	en75_smp_ops_rai = vsmp_smp_ops;
+	en75_smp_ops_rai.init_secondary = rtl_init_secondary;
+	register_smp_ops(&en75_smp_ops_rai);
+	return 0;
+}
+
 void __init prom_init(void)
 {
 	// 1. Bring up early printk
@@ -89,18 +109,40 @@ void __init plat_mem_setup(void)
 // 3. Overload __weak device_tree_init()
 void __init device_tree_init(void)
 {
+	// Probing for CPS causes a warning if CM is not available.
+	bool has_cm = false;
+
 	pr_info("%s\n", __func__);
 	unflatten_and_copy_device_tree();
 
-	// Add SMP registration
-	mips_cpc_probe();
+	{
+		unsigned int oconfig7 = read_c0_config7();
+		unsigned int nconfig7 = oconfig7;
 
-	if (!register_cps_smp_ops())
-		return;
-	if (!register_vsmp_smp_ops())
-		return;
+		nconfig7 |= (1 << 8);
+		if (oconfig7 != nconfig7) {
+			__asm__ __volatile("sync");
+			write_c0_config7(nconfig7);
+		}
+	}
 
-	register_up_smp_ops();
+	/* early detection of CMP support */
+	if (!mips_cm_probe()) {
+		pr_info("Enabled MIPS_CM\n");
+		has_cm = true;
+	}
+
+	if (!mips_cpc_probe())
+		pr_info("Enabled MIPS_CPC\n");
+
+	if (has_cm && !register_cps_smp_ops()) {
+		pr_info("Using MIPS_CPS\n");
+	} else if (!en75_register_vsmp_smp_ops()) {
+		pr_info("Using MIPS_MT_SMP\n");
+	} else {
+		pr_info("Using SMP_UP\n");
+		register_up_smp_ops();
+	}
 }
 
 const char *get_system_type(void)
