@@ -1,0 +1,29 @@
+From 9793282b04bdaf2758172c0798579d9efb3c3600 Mon Sep 17 00:00:00 2001
+From: Caleb James DeLisle <cjd@cjdns.fr>
+Date: Sun, 30 Mar 2025 15:57:22 +0000
+Subject: [PATCH v3 08/10] dt-bindings: vendor-prefixes: Add SmartFiber
+
+Add "smartfiber" vendor prefix for manufactorer of EcoNet based boards.
+
+Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
+Acked-by: Krzysztof Kozlowski <krzysztof.kozlowski@linaro.org>
+---
+ Documentation/devicetree/bindings/vendor-prefixes.yaml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/vendor-prefixes.yaml b/Documentation/devicetree/bindings/vendor-prefixes.yaml
+index 371f6bb81f81..dc064e6acf4b 100644
+--- a/Documentation/devicetree/bindings/vendor-prefixes.yaml
++++ b/Documentation/devicetree/bindings/vendor-prefixes.yaml
+@@ -1388,6 +1388,8 @@ patternProperties:
+     description: SKOV A/S
+   "^skyworks,.*":
+     description: Skyworks Solutions, Inc.
++  "^smartfiber,.*":
++    description: ShenZhen Smartfiber Technology Co, Ltd.
+   "^smartlabs,.*":
+     description: SmartLabs LLC
+   "^smartrg,.*":
+-- 
+2.39.5
+

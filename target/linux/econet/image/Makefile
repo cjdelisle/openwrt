@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
 define Target/Description
-	Build firmware images for EN75xx MIPS based boards.
+	Build firmware images for EcoNet MIPS based boards.
 endef
 
 # tclinux-trx is the default format used in the SDK

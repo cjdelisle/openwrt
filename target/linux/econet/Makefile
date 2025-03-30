@@ -5,7 +5,7 @@
 include $(TOPDIR)/rules.mk
 
 ARCH:=mips
-BOARD:=en75
+BOARD:=econet
 BOARDNAME:=Econet EN75xx MIPS
 FEATURES:=dt source-only squashfs nand
 SUBTARGETS:=en751221

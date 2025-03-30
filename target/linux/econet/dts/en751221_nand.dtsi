@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "en751221.dtsi"
+
+/ {
+	spi_ctrl: spi_controller@1fa10000 {
+		compatible = "airoha,en7523-spi";
+		reg = <0x1fa10000 0x140>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		spi-rx-bus-width = <2>;
+		spi-tx-bus-width = <2>;
+
+		nand: nand@0 {
+			compatible = "spi-nand";
+			reg = <0>;
+			nand-ecc-engine = <&nand>;
+		};
+	};
+};
