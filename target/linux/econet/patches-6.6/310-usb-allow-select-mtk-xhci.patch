@@ -1,0 +1,22 @@
+--- a/drivers/usb/host/Kconfig
++++ b/drivers/usb/host/Kconfig
+@@ -71,7 +71,7 @@ config USB_XHCI_HISTB
+ config USB_XHCI_MTK
+ 	tristate "xHCI support for MediaTek SoCs"
+ 	select MFD_SYSCON
+-	depends on (MIPS && SOC_MT7621) || ARCH_MEDIATEK || COMPILE_TEST
++	depends on (MIPS && SOC_MT7621) || ARCH_MEDIATEK || ECONET || COMPILE_TEST
+ 	help
+ 	  Say 'Y' to enable the support for the xHCI host controller
+ 	  found in MediaTek SoCs.
+--- a/drivers/phy/mediatek/Kconfig
++++ b/drivers/phy/mediatek/Kconfig
+@@ -27,7 +27,7 @@ config PHY_MTK_XFI_TPHY
+ 
+ config PHY_MTK_TPHY
+ 	tristate "MediaTek T-PHY Driver"
+-	depends on ARCH_MEDIATEK || COMPILE_TEST
++	depends on ARCH_MEDIATEK || ECONET || COMPILE_TEST
+ 	depends on OF && OF_ADDRESS
+ 	depends on HAS_IOMEM
+ 	select GENERIC_PHY
