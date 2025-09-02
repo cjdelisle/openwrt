@@ -1,0 +1,1 @@
+obj-y := dev-xhci.o uphy.o
