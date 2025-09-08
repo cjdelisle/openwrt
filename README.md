@@ -20,11 +20,19 @@ On alpine: apk add picocom lrzsz
 
 Make sure you have a serial connection to your board.
 
+### Setup build environment
+This version of Openwrt does not build with more recent versions of GCC, so to build this
+you will need to create a docker environment.
+
+1. Edit `Dockerfile` to change the user id to your user.
+2. `docker build . -t openwrt-kernel49-builder`
+
 ### Build
 You may have to install some dependencies for the build to complete successfully.
 
-1. `cp ./_config ./.config`
-2. `make -j$(nproc) || make -j1 V=s` 
+1. `docker run --rm -it -v .:/home/user/openwrt-kernel49 openwrt-kernel49-builder`
+2. `cp ./_config ./.config`
+3. `make -j$(nproc) || make -j1 V=s` 
 
 ### Flash
 
