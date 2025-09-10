@@ -16,31 +16,13 @@
  	help
  	  Say 'Y' to enable the support for the xHCI host controller
  	  found in MediaTek SoCs.
---- a/drivers/usb/host/xhci-mtk.c
-+++ b/drivers/usb/host/xhci-mtk.c
-@@ -306,6 +306,8 @@ static int xhci_mtk_host_disable(struct
- 	return ret;
- }
- 
-+extern void uphy_init(void);
-+
- static int xhci_mtk_ssusb_config(struct xhci_hcd_mtk *mtk)
- {
- 	struct mu3c_ippc_regs __iomem *ippc = mtk->ippc_regs;
-@@ -337,6 +339,8 @@ static int xhci_mtk_ssusb_config(struct
- 	dev_dbg(mtk->dev, "%s u2p:%d, u3p:%d\n", __func__,
- 			mtk->num_u2_ports, mtk->num_u3_ports);
- 
-+	uphy_init();
-+
- 	return xhci_mtk_host_enable(mtk);
- }
- 
-@@ -554,6 +558,7 @@ static int xhci_mtk_probe(struct platfor
- 		return wakeup_irq;
- 
- 	mtk->lpm_support = of_property_read_bool(node, "usb3-lpm-capable");
-+	mtk->lpm_support = true;
- 	mtk->u2_lpm_disable = of_property_read_bool(node, "usb2-lpm-disable");
- 	/* optional property, ignore the error if it does not exist */
- 	of_property_read_u32(node, "mediatek,u3p-dis-msk",
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -392,6 +392,7 @@ config ECONET
+ 	bool "EcoNet MIPS family"
+ 	select BOOT_RAW
+ 	select CPU_BIG_ENDIAN
++	select DMA_NONCOHERENT
+ 	select DEBUG_ZBOOT if DEBUG_KERNEL
+ 	select EARLY_PRINTK_8250
+ 	select ECONET_EN751221_TIMER
