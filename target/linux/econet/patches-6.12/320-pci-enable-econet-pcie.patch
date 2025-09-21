@@ -1,0 +1,29 @@
+--- a/arch/mips/econet/Makefile
++++ b/arch/mips/econet/Makefile
+@@ -1,2 +1,2 @@
+ 
+-obj-y := init.o
++obj-y := init.o pci_en75xx.o
+--- a/arch/mips/econet/Kconfig
++++ b/arch/mips/econet/Kconfig
+@@ -13,7 +13,9 @@ choice
+ 		bool "EN751221 family"
+ 		select COMMON_CLK
+ 		select ECONET_EN751221_INTC
++		select HAVE_PCI
+ 		select IRQ_MIPS_CPU
++		select PCI_DRIVERS_LEGACY
+ 		select SMP
+ 		select SMP_UP
+ 		select SYS_SUPPORTS_SMP
+--- a/drivers/phy/ralink/Kconfig
++++ b/drivers/phy/ralink/Kconfig
+@@ -4,7 +4,7 @@
+ #
+ config PHY_MT7621_PCI
+ 	tristate "MediaTek MT7621 PCI PHY Driver"
+-	depends on (RALINK && OF) || COMPILE_TEST
++	depends on (RALINK && OF) || (ECONET && OF) || COMPILE_TEST
+ 	select GENERIC_PHY
+ 	select REGMAP_MMIO
+ 	help

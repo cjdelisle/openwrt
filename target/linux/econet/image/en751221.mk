@@ -20,6 +20,7 @@ define Device/tplink_archer-vr1200v-v2
   TPLINK_HWREVADD := 0x0
   TPLINK_HVERSION := 3
   DEVICE_DTS := en751221_tplink_archer-vr1200v-v2
+  DEVICE_PACKAGES := kmod-mt7603 kmod-mt76x2
   IMAGES := sysupgrade.bin
   IMAGE/sysupgrade.bin := append-kernel | lzma | pad-to 4193792 | append-rootfs | \
     tplink-v2-header -R 0x400000
