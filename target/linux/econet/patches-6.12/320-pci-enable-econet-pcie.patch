@@ -1,9 +1,3 @@
---- a/arch/mips/econet/Makefile
-+++ b/arch/mips/econet/Makefile
-@@ -1,2 +1,2 @@
- 
--obj-y := init.o
-+obj-y := init.o pci_en75xx.o
 --- a/arch/mips/econet/Kconfig
 +++ b/arch/mips/econet/Kconfig
 @@ -13,7 +13,9 @@ choice
@@ -12,7 +6,7 @@
  		select ECONET_EN751221_INTC
 +		select HAVE_PCI
  		select IRQ_MIPS_CPU
-+		select PCI_DRIVERS_LEGACY
++		select PCI_DRIVERS_GENERIC
  		select SMP
  		select SMP_UP
  		select SYS_SUPPORTS_SMP
@@ -27,3 +21,160 @@
  	select GENERIC_PHY
  	select REGMAP_MMIO
  	help
+--- a/drivers/clk/Kconfig
++++ b/drivers/clk/Kconfig
+@@ -212,7 +212,7 @@ config COMMON_CLK_CS2000_CP
+ config COMMON_CLK_EN7523
+ 	bool "Clock driver for Airoha EN7523 SoC system clocks"
+ 	depends on OF
+-	depends on ARCH_AIROHA || COMPILE_TEST
++	depends on ARCH_AIROHA || ECONET || COMPILE_TEST
+ 	default ARCH_AIROHA
+ 	help
+ 	  This driver provides the fixed clocks and gates present on Airoha
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -187,7 +187,7 @@ config PCI_MVEBU
+ 
+ config PCIE_MEDIATEK
+ 	tristate "MediaTek PCIe controller"
+-	depends on ARCH_AIROHA || ARCH_MEDIATEK || COMPILE_TEST
++	depends on ARCH_AIROHA || ARCH_MEDIATEK || ECONET || COMPILE_TEST
+ 	depends on OF
+ 	depends on PCI_MSI
+ 	help
+--- a/drivers/pci/controller/pcie-mediatek.c
++++ b/drivers/pci/controller/pcie-mediatek.c
+@@ -139,6 +139,13 @@
+ #define PCIE_LINK_STATUS_V2	0x804
+ #define PCIE_PORT_LINKUP_V2	BIT(10)
+ 
++/* EN751221 host registers */
++#define EN75_REG_LINKUP 	0x50
++#define EN75_LINKUP_F(port)	BIT((port) + 1)
++
++/* EN751221 per-port registers */
++#define EN75_REG_CLASSID	0x104 /* On EN751221 this is at 104, not 106 */
++
+ struct mtk_pcie_port;
+ 
+ /**
+@@ -655,6 +662,96 @@ static int mtk_pcie_setup_irq(struct mtk
+ 	return 0;
+ }
+ 
++static int mtk_pcie_startup_port_en751221(struct mtk_pcie_port *port)
++{
++	struct mtk_pcie *pcie = port->pcie;
++	struct pci_host_bridge *host = pci_host_bridge_from_priv(pcie);
++	struct resource *mem = NULL;
++	struct resource_entry *entry;
++	const struct mtk_pcie_soc *soc = port->pcie->soc;
++	u32 val;
++	int err;
++
++	/* We need the base in order to get the linkup register. */
++	if (!pcie->cfg) {
++		dev_err(pcie->dev, "no cfg regmap\n");
++		return -EINVAL;
++	}
++
++	entry = resource_list_first_type(&host->windows, IORESOURCE_MEM);
++	if (entry)
++		mem = entry->res;
++	if (!mem)
++		return -EINVAL;
++
++	/* Assert all reset signals */
++	writel(0, port->base + PCIE_RST_CTRL);
++
++	/*
++	 * Enable PCIe link down reset, if link status changed from link up to
++	 * link down, this will reset MAC control registers and configuration
++	 * space.
++	 */
++	writel(PCIE_LINKDOWN_RST_EN, port->base + PCIE_RST_CTRL);
++
++	/*
++	 * Described in PCIe CEM specification sections 2.2 (PERST# Signal) and
++	 * 2.2.1 (Initial Power-Up (G3 to S0)). The deassertion of PERST# should
++	 * be delayed 100ms (TPVPERL) for the power and clock to become stable.
++	 */
++	msleep(100);
++
++	/* De-assert PHY, PE, PIPE, MAC and configuration reset	*/
++	val = readl(port->base + PCIE_RST_CTRL);
++	val |= PCIE_PHY_RSTB | PCIE_PERSTB | PCIE_PIPE_SRSTB |
++	       PCIE_MAC_SRSTB | PCIE_CRSTB;
++	writel(val, port->base + PCIE_RST_CTRL);
++
++	/* Set up vendor ID and class code */
++	if (soc->need_fix_class_id) {
++		val = PCI_VENDOR_ID_MEDIATEK;
++		writew(val, port->base + PCIE_CONF_VEND_ID);
++
++		val = PCI_CLASS_BRIDGE_PCI;
++		writew(val, port->base + EN75_REG_CLASSID);
++	}
++
++	if (soc->need_fix_device_id)
++		writew(soc->device_id, port->base + PCIE_CONF_DEVICE_ID);
++
++	/* 100ms timeout value should be enough for Gen1/2 training */
++	err = regmap_read_poll_timeout(pcie->cfg, EN75_REG_LINKUP, val,
++				       !!(val & EN75_LINKUP_F(port->slot)),
++				       20, 100 * USEC_PER_MSEC);
++
++	if (err) {
++		dev_err(pcie->dev, "wait link up timeout, val = %x\n", val);
++		return -ETIMEDOUT;
++	}
++
++	/* Set INTx mask */
++	val = readl(port->base + PCIE_INT_MASK);
++	val &= ~INTX_MASK;
++	writel(val, port->base + PCIE_INT_MASK);
++
++	if (IS_ENABLED(CONFIG_PCI_MSI))
++		mtk_pcie_enable_msi(port);
++
++	/* Set AHB to PCIe translation windows */
++	val = lower_32_bits(mem->start) |
++	      AHB2PCIE_SIZE(fls(resource_size(mem)));
++	writel(val, port->base + PCIE_AHB_TRANS_BASE0_L);
++
++	val = upper_32_bits(mem->start);
++	writel(val, port->base + PCIE_AHB_TRANS_BASE0_H);
++
++	/* Enable EP to RC1 access, EN751221: No window0 */
++	val = WIN_ENABLE;
++	writel(val, port->base + PCIE_AXI_WINDOW0);
++
++	return 0;
++}
++
+ static int mtk_pcie_startup_port_v2(struct mtk_pcie_port *port)
+ {
+ 	struct mtk_pcie *pcie = port->pcie;
+@@ -1223,12 +1320,21 @@ static const struct mtk_pcie_soc mtk_pci
+ 	.setup_irq = mtk_pcie_setup_irq,
+ };
+ 
++static const struct mtk_pcie_soc mtk_pcie_soc_en751221 = {
++	.need_fix_class_id = true,
++	.need_fix_device_id = true,
++	.ops = &mtk_pcie_ops_v2,
++	.startup = mtk_pcie_startup_port_en751221,
++	.setup_irq = mtk_pcie_setup_irq,
++};
++
+ static const struct of_device_id mtk_pcie_ids[] = {
+ 	{ .compatible = "mediatek,mt2701-pcie", .data = &mtk_pcie_soc_v1 },
+ 	{ .compatible = "mediatek,mt7623-pcie", .data = &mtk_pcie_soc_v1 },
+ 	{ .compatible = "mediatek,mt2712-pcie", .data = &mtk_pcie_soc_mt2712 },
+ 	{ .compatible = "mediatek,mt7622-pcie", .data = &mtk_pcie_soc_mt7622 },
+ 	{ .compatible = "mediatek,mt7629-pcie", .data = &mtk_pcie_soc_mt7629 },
++	{ .compatible = "econet,en751221-pcie", .data = &mtk_pcie_soc_en751221 },
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, mtk_pcie_ids);
