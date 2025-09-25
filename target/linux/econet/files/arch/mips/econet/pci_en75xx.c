@@ -26,9 +26,9 @@
 #define RALINK_PCIE0_RST		(1<<26)
 #define RALINK_PCIE1_RST		(1<<27)
 #define RALINK_PCIEHB_RST		(1<<29)
-#define isEN7512 1
+#define isEN7512 0
 #define SURFBOARDINT_PCIE0 23
-#define SURFBOARDINT_PCIE1 34
+#define SURFBOARDINT_PCIE1 24
 
 
 #ifdef CONFIG_PCI
