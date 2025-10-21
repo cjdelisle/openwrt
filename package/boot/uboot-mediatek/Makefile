@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
-PKG_VERSION:=2025.07
-PKG_HASH:=0f933f6c5a426895bf306e93e6ac53c60870e4b54cda56d95211bec99e63bec7
+PKG_VERSION:=2025.10
+PKG_HASH:=b4f032848e56cc8f213ad59f9132c084dbbb632bc29176d024e58220e0efdf4a
 PKG_BUILD_DEPENDS:=!(TARGET_ramips||TARGET_mediatek_mt7623):arm-trusted-firmware-tools/host
 
 UBOOT_USE_INTREE_DTC:=1
@@ -251,8 +251,8 @@ define U-Boot/mt7981_cmcc_rax3000m-emmc-ddr3
   UBOOT_IMAGE:=u-boot.fip
   BL2_BOOTDEV:=emmc
   BL2_SOC:=mt7981
-  BL2_DDRTYPE:=ddr3
-  DEPENDS:=+trusted-firmware-a-mt7981-emmc-ddr3
+  BL2_DDRTYPE:=ddr3-1866mhz
+  DEPENDS:=+trusted-firmware-a-mt7981-emmc-ddr3-1866mhz
 endef
 
 define U-Boot/mt7981_cmcc_rax3000m-emmc-ddr4
@@ -275,8 +275,8 @@ define U-Boot/mt7981_cmcc_rax3000m-nand-ddr3
   UBOOT_IMAGE:=u-boot.fip
   BL2_BOOTDEV:=spim-nand
   BL2_SOC:=mt7981
-  BL2_DDRTYPE:=ddr3
-  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
+  BL2_DDRTYPE:=ddr3-1866mhz
+  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3-1866mhz
 endef
 
 define U-Boot/mt7981_cmcc_rax3000m-nand-ddr4
