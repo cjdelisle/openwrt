@@ -7,6 +7,9 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/irqdomain.h>
+#include <linux/platform_device.h>
+#include <linux/of_device.h>
+#include <linux/of_platform.h>
 
 #include <asm/pci.h>
 #include <asm/io.h>
@@ -49,7 +52,8 @@
 
 static int pcie_link_status;
 static DEFINE_SPINLOCK(asic_pcr_lock);
-struct irq_domain *en75_irq_domain;
+static int en75_irq0;
+static int en75_irq1;
 
 static u32 en75xx_get_rc_port(u32 busn, u32 slot)
 {
@@ -462,19 +466,12 @@ int pcibios_plat_dev_init(struct pci_dev *dev)
 
 int pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 {
-	int pci_irq = 0;
-
 	if (slot == 0x0)
-		pci_irq = SURFBOARDINT_PCIE0;
+		return en75_irq0;
 	else if (slot == 0x1)
-		pci_irq = SURFBOARDINT_PCIE1;
-
-    if (!en75_irq_domain) {
-        pr_err("no irq domain\n");
-        return -ENODEV;
-    }
-
-    return irq_create_mapping(en75_irq_domain, pci_irq);
+		return en75_irq1;
+	else
+		return -ENODEV;
 }
 
 static inline void en75xx_pcie_init_phy(void)
@@ -534,7 +531,10 @@ static inline void en75xx_pcie_init_phy(void)
 int __init init_en75xx_pci(void);
 int __init init_en75xx_pci(void)
 {
+	struct platform_device *pdev;
+	struct device_node *np;
 	u32 i, reg_val;
+	int ret;
 
 	pr_info("init_en75xx_pci\n");
 
@@ -543,21 +543,35 @@ int __init init_en75xx_pci(void)
 	ioport_resource.start = 0;
 	ioport_resource.end = ~0;
 
-    struct device_node *np;
 
-	np = of_find_compatible_node(NULL, NULL, "econet,en751221-intc");
+	np = of_find_compatible_node(NULL, NULL, "econet,en751221-pcie-legacy");
 	if (!np) {
 		pr_err("no compatible intc node\n");
 		return -ENODEV;
 	}
 
-    en75_irq_domain = irq_find_host(np);
-    of_node_put(np);
+	pdev = of_platform_device_create(np, NULL, NULL);
+	if (!pdev) {
+		pr_err("failed to create platform device for %pOF\n", np);
+		return -ENODEV;
+	}
 
-    if (!en75_irq_domain) {
-        pr_err("no irq domain\n");
-        return -ENODEV;
-    }
+	/* Retrieve first interrupt */
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0) {
+		pr_err("failed to get first interrupt\n");
+		return ret;
+	}
+	en75_irq0 = ret;
+
+	/* Try to get an optional second interrupt */
+	ret = platform_get_irq(pdev, 1);
+	if (ret < 0) {
+		/* No second interrupt is okay, it means one slot */
+		en75_irq1 = -ENODEV;
+	} else {
+		en75_irq1 = ret;
+	}
 
 	/* reset PCIe devices by pulse low */
 	reg_val = sysRegRead(ECONET_PCIEC_REG);
@@ -684,6 +698,7 @@ int __init init_en75xx_pci(void)
 #endif
 
 	en75xx_pci_controller.io_map_base = mips_io_port_base;
+	en75xx_pci_controller.of_node = np;
 
 	register_pci_controller(&en75xx_pci_controller);
 

@@ -56,6 +56,31 @@
 		econet,shadow-interrupts = <7 2>, <8 3>, <13 12>, <30 29>;
 	};
 
+	pcie: pcie-legacy {
+		compatible = "econet,en751221-pcie-legacy";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		interrupt-parent = <&intc>;
+		interrupts = <23>, <24>;
+		status = "disabled";
+
+		pcie0: pcie@0,0 {
+			reg = <0x0000 0 0 0 0>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			ranges;
+		};
+
+		pcie1: pcie@1,0 {
+			reg = <0x0800 0 0 0 0>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			ranges;
+		};
+	};
+
     usb: usb@1fb90000 {
             compatible = "mediatek,mt8173-xhci", "mediatek,mtk-xhci";
             reg = <0x1fb90000 0x4000>,

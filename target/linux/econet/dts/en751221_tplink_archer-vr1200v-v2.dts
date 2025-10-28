@@ -35,6 +35,28 @@
 		partition@80000 {
 			label = "misc";
 			reg = <0x00080000 0x140000>;
+
+			nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					eeprom_misc_80000: eeprom@80000 {
+							/* MT7592 */
+							reg = <0x80000 0x200>;
+					};
+
+					eeprom_misc_a0000: eeprom@a0000 {
+							/* MT7613BE */
+							reg = <0xa0000 0x600>;
+					};
+
+					macaddr_misc_8f100: macaddr@8f100 {
+							compatible = "mac-base";
+							reg = <0x4f100 0x6>;
+							#nvmem-cell-cells = <1>;
+					};
+			};
 		};
 		partition@1c0200 {
 			label = "kernel";
@@ -65,5 +87,27 @@
 			 */
 			reg = <0x4000000 0x34a0000>;
 		};
+	};
+};
+
+&pcie {
+	status = "okay";
+};
+&pcie0 {
+	wifi@0,0 {
+		/* MT7592 */
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		nvmem-cells = <&eeprom_misc_80000>, <&macaddr_misc_8f100 1>;
+		nvmem-cell-names = "eeprom", "mac-address";
+	};
+};
+&pcie1 {
+	wifi@0,0 {
+		/* MT7613BE */
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		nvmem-cells = <&eeprom_misc_a0000>, <&macaddr_misc_8f100 2>;
+		nvmem-cell-names = "eeprom", "mac-address";
 	};
 };

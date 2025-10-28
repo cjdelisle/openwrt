@@ -4,17 +4,17 @@
 #include "en751221.dtsi"
 
 / {
-	model = "SmartFiber XP8421-B";
-	compatible = "smartfiber,xp8421-b", "econet,en751221";
+	model = "ZyXEL PMG5617GA";
+	compatible = "tplink,zyxel-pmg5617ga", "econet,en751221";
 
 	memory@0 {
 		device_type = "memory";
-		reg = <0x00000000 0x1c000000>;
+		reg = <0x00000000 0x8000000>;
 	};
 
 	chosen {
 		stdout-path = "/serial@1fbf0000:115200";
-		linux,usable-memory-range = <0x00020000 0x1bfe0000>;
+		linux,usable-memory-range = <0x00020000 0x07fe0000>;
 	};
 };
 
@@ -41,7 +41,7 @@
 
 		partition@80000 {
 			label = "tclinux";
-			reg = <0x80000 0x1400000>;
+			reg = <0x80000 0x3800000>;
 			read-only;
 			econet,enable-remap;
 		};
@@ -49,48 +49,51 @@
 		/* Nested inside of tclinux */
 		partition@480000 {
 			label = "rootfs";
-			reg = <0x480000 0xf80000>;
+			reg = <0x480000 0x3400000>;
 			linux,rootfs;
 			read-only;
 		};
 
-		partition@1480000 {
+		partition@3880000 {
 			label = "tclinux_alt";
-			reg = <0x1480000 0x1400000>;
+			reg = <0x3880000 0x0036c0000>;
 		};
 
-		partition@2880000 {
-			label = "openjdk";
-			reg = <0x2880000 0x2000000>;
+		partition@6f40000 {
+			label = "wwan";
+			reg = <0x006f40000 0x000100000>;
 		};
 
-		partition@4880000 {
-			label = "ubifs";
-			reg = <0x4880000 0x9100000>;
+		partition@7040000 {
+			label = "factory_data";
+			reg = <0x007040000 0x000400000>;
 		};
 
-		partition@d980000 {
-			label = "unknown";
-			reg = <0xd980000 0x4c0000>;
+		partition@7440000 {
+			label = "rom-d";
+			reg = <0x007440000 0x000100000>;
 		};
 
-		partition@de40000 {
+		partition@7540000 {
 			label = "reservearea";
-			reg = <0xde40000 0x1c0000>;
+			reg = <0x007540000 0x000080000>;
 
 			nvmem-layout {
 					compatible = "fixed-layout";
 					#address-cells = <1>;
 					#size-cells = <1>;
 
-					eeprom_reserve_140000: eeprom@140000 {
+					eeprom_reserve_60000: eeprom@60000 {
 							/* MT7592 */
-							reg = <0x140000 0x200>;
+							/* This overlaps the MT7612E EEPROM, but MT7603E demands
+							 * 1024 bytes of EEPROM even though only 512 bytes are used.
+							 */
+							reg = <0x60000 0x400>;
 					};
 
-					eeprom_reserve_180040: eeprom@180040 {
+					eeprom_reserve_60200: eeprom@60200 {
 							/* MT7612E */
-							reg = <0x180040 0x600>;
+							reg = <0x60200 0x200>;
 					};
 			};
 		};
@@ -102,19 +105,19 @@
 };
 &pcie0 {
 	wifi@0,0 {
-		/* MT7612E */
+		/* MT7592 */
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		nvmem-cells = <&eeprom_reserve_180040>;
+		nvmem-cells = <&eeprom_reserve_60000>;
 		nvmem-cell-names = "eeprom";
 	};
 };
 &pcie1 {
 	wifi@0,0 {
-		/* MT7592 */
+		/* MT7612E */
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		nvmem-cells = <&eeprom_reserve_140000>;
+		nvmem-cells = <&eeprom_reserve_60200>;
 		nvmem-cell-names = "eeprom";
 	};
 };
