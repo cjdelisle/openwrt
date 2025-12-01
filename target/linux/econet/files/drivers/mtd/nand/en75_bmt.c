@@ -54,6 +54,11 @@
  * A side-effect of this is if the user puts a valid BBT at the end of
  * their space, there's a chance it might get picked up a THE BBT.
  *
+ * This implementation does not compute REQUIRED_GOOD_BLOCKS because the
+ * computation is slightly different depending on firmware. Instead we examine
+ * the BMT because firmware always leaves an entry for every block in the
+ * reserve area.
+ *
  * Mercifully, blocks in the reserve area are never added to the BBT or
  * BMT, so we don't have any mapping to do in the reserve area, we just
  * have to check every block to see if it's bad before using it.
@@ -119,11 +124,13 @@
 
 #define MAX_BMT_SIZE				256
 
-/* Size field is a u8 but vendor firmware checksums over all 1000 places. */
-#define MAX_BBT_SIZE				1000
-
-/* Vendor firmware calls this POOL_GOOD_BLOCK_PERCENT */
-#define REQUIRED_GOOD_BLOCKS(total_blocks)	((total_blocks) * 8 / 100)
+/* Size field is a u8 but vendor firmware checksums over more than that.
+ * The exact number of bytes checksummed depends on the firmware, however
+ * zero entries do not change the checksum, so we specify 1018 which
+ * causes the entire BBT to fill one 2048 byte page. We tolerate FFFF
+ * entries in the BBT so that we can read the table of vendor firmware.
+ */
+#define MAX_BBT_SIZE				1018
 
 /* This is ours but it is on-disk so we need consensus with ourselves. */
 #define BLOCK_WORN_MARK				0x55
@@ -196,7 +203,7 @@ struct bbt_table_header {
 	/* Number of bad blocks in table */
 	u8 size;
 	/* Unused (ffff) */
-	u8 reserved[2];
+	u16 reserved;
 };
 
 static_assert(sizeof(struct bbt_table_header) == 12);
@@ -207,7 +214,7 @@ struct bbt_table {
 	u16			table[MAX_BBT_SIZE];
 };
 
-static_assert(sizeof(struct bbt_table) == 2012);
+static_assert(sizeof(struct bbt_table) == 2048);
 
 /*
  * In memory
@@ -931,70 +938,118 @@ static bool block_is_erased(u8 *data, u32 datalen, u8 *oob, u32 ooblen)
 	return true;
 }
 
-static int try_parse_bbt(struct bbt_table *out, u8 *buf, int len)
+static const char *parse_bbt(struct bbt_table *out, u8 *buf, int len, u16 total_blks)
 {
 	static struct bbt_table workspace;
 
 	if (len < sizeof(*out))
-		return -EINVAL;
+		return "size";
 
 	memcpy(&workspace, buf, sizeof(workspace));
 
 	if (strncmp(workspace.header.signature, "RAWB", 4))
-		return -EINVAL;
+		return "magic";
+
+	if (workspace.header.version != 1)
+		return "version";
+
+	if (workspace.header.reserved != 0xffff)
+		return "reserved";
+
+	for (int i = 0; i < ARRAY_SIZE(workspace.table); i++) {
+		/* Vendor firmware uses varying sizes of table, what follows
+		 * the table is unallocated space (ffff) so we convert ffff
+		 * to 0 so that it won't affect our checksum.
+		 * When we write, we write more zero entries than vendor
+		 * firmware but that doesn't affect them because they just
+		 * don't read them.
+		 *
+		 * However, if we hit an entry which can't be valid, we fail
+		 * because it implies we might not be reading an actual BBT.
+		 * Different vendor firmwares have different pool size and
+		 * the BBT is at the beginning of the pool, so we find the
+		 * BBT by searching backwards until we see something. So
+		 * therefore we consider that more safety is better.
+		 */
+		if (workspace.table[i] == 0xffff)
+			workspace.table[i] = 0;
+		else if (workspace.table[i] > total_blks)
+			return "entry";
+	}
 
 	if (workspace.header.checksum != bbt_checksum(&workspace))
-		return -EINVAL;
+		return "checksum";
 
 	sort_bbt(&workspace);
 
 	memcpy(out, &workspace, sizeof(workspace));
-	return 0;
+	return NULL;
 }
 
-static int try_parse_bmt(struct bmt_table *out, u8 *buf, int len)
+static const char *parse_bmt(struct bmt_table *out, u8 *buf, int len, int *ra_size)
 {
 	static struct bmt_table workspace;
+	int size;
 
 	if (len < sizeof(*out))
-		return -EINVAL;
+		return "size";
 
 	memcpy(&workspace, buf, sizeof(workspace));
 
 	if (strncmp(workspace.header.signature, "BMT", 3))
-		return -EINVAL;
+		return "magic";
+
+	if (workspace.header.version != 1)
+		return "version";
+
+	for (int i = 0; i < ARRAY_SIZE(workspace.header.reserved); i++)
+		if (workspace.header.reserved[i] != 0xff)
+			return "reserved";
 
 	/*
-	 * The vendor firmware checksums over rblocks entries, but zero
-	 * values do not affect the checksum so this works.
-	 * We don't know rblocks while we're scanning and in any case
-	 * it's a moving target, if a block fails in the reserve area,
-	 * rblocks will increase by one. So we use the size from the
-	 * header and if the vendor firmware left some trash in the
-	 * buffer after the last entry, we're going to have an invalid
-	 * checksum.
+	 * The number of blocks in the reserved space depends on flash size,
+	 * typically 8% of total blocks rounded up. However, this computation
+	 * is not guaranteed, some firmware versions do different things.
+	 *
+	 * However, there is always one BMT entry per block in the reserved
+	 * area. So we can determine the size of the block pool by looking
+	 * at the BMT.
 	 */
-	if (workspace.header.checksum !=
-		bmt_checksum(&workspace, workspace.header.size))
-		return -EINVAL;
+	for (size = 0; size < ARRAY_SIZE(workspace.table); size++) {
+		if (workspace.table[size].from == 0xffff &&
+		    workspace.table[size].to == 0xffff)
+			break;
+	}
+
+	if (size >= MAX_BMT_SIZE)
+		return "entries";
+
+	if (workspace.header.checksum != bmt_checksum(&workspace, size))
+		return "checksum";
 
 	memcpy(out, &workspace, sizeof(workspace));
-	return 0;
+
+	if (ra_size)
+		*ra_size = size;
+
+	return NULL;
 }
 
 static int r_scan_reserve(struct en75_bmt_m *ctx)
 {
 	u16 total_blks = ctx->mtk->total_blks;
 	int cursor = total_blks - 1;
-	int good_blocks = 0;
-	int rblock = 0;
+	int expected_rblocks = -1;
 	int rblocks_available = 0;
+	bool found_bbt = false;
+	int rblock = 0;
 	u8 fdm[4];
 
 	for (; cursor > 0; cursor--) {
-		int ret;
 		u8 *data_buf = ctx->mtk->data_buf;
 		u32 pg_size = ctx->mtk->pg_size;
+		const char *parse_res;
+		int ret;
 
 		if (rblock >= rblocks_available) {
 			rblocks_available += cursor;
@@ -1022,34 +1077,67 @@ static int r_scan_reserve(struct en75_bmt_m *ctx)
 		if (ret || fdm_is_bad(fdm)) {
 			pr_info("%s: skipping bad block %d in reserve area\n", log_pfx, cursor);
 			bif.status = BS_BAD;
-		} else if (fdm_is_mapped(fdm)) {
-			pr_debug("%s: found mapped block %d\n", log_pfx, cursor);
-			bif.status = BS_MAPPED;
-		} else if (!try_parse_bbt(&ctx->bbt, data_buf, pg_size)) {
-			pr_info("%s: found BBT in block %d\n", log_pfx, cursor);
-			bif.status = BS_BBT;
-		} else if (!try_parse_bmt(&ctx->bmt, data_buf, pg_size)) {
-			pr_info("%s: found BMT in block %d\n", log_pfx, cursor);
-			bif.status = BS_BMT;
-		} else if (block_is_erased(data_buf, pg_size, fdm, sizeof(fdm))) {
-			pr_debug("%s: found available block %d\n", log_pfx, cursor);
-			bif.status = BS_AVAILABLE;
-		} else {
-			pr_debug("%s: found block needing erase %d\n", log_pfx, cursor);
-			bif.status = BS_NEED_ERASE;
+			goto found;
 		}
 
-		ctx->rblocks[rblock++] = bif;
-		good_blocks += (bif.status != BS_BAD);
+		if (fdm_is_mapped(fdm)) {
+			pr_debug("%s: found mapped block %d\n", log_pfx, cursor);
+			bif.status = BS_MAPPED;
+			goto found;
+		}
 
-		if (good_blocks >= REQUIRED_GOOD_BLOCKS(total_blks))
+		parse_res = parse_bbt(&ctx->bbt, data_buf, pg_size, total_blks);
+		if (!parse_res) {
+			pr_info("%s: found BBT in block %d\n", log_pfx, cursor);
+			bif.status = BS_BBT;
+			found_bbt = true;
+			goto found;
+		} else {
+			pr_info("%s: Found likely-corrupt BBT in block %d (invalid: %s)\n",
+				log_pfx, cursor, parse_res);
+			print_hex_dump(KERN_INFO, "BBT: ", DUMP_PREFIX_OFFSET, 16, 1,
+				       data_buf, pg_size, true);
+		}
+
+		parse_res = parse_bmt(&ctx->bmt, data_buf, pg_size, &expected_rblocks);
+		if (!parse_res) {
+			pr_info("%s: found BMT in block %d, pool_size = %d\n",
+				log_pfx, cursor, expected_rblocks);
+			bif.status = BS_BMT;
+			goto found;
+		} else {
+			pr_info("%s: Found likely-corrupt BMT in block %d (invalid: %s)\n",
+				log_pfx, cursor, parse_res);
+			print_hex_dump(KERN_INFO, "BMT: ", DUMP_PREFIX_OFFSET, 16, 1,
+				       data_buf, pg_size, true);
+		}
+		
+		if (block_is_erased(data_buf, pg_size, fdm, sizeof(fdm))) {
+			pr_debug("%s: found available block %d\n", log_pfx, cursor);
+			bif.status = BS_AVAILABLE;
+			goto found;
+		}
+
+		pr_info("%s: found data block in reserve pool %d\n",
+			log_pfx, cursor);
+		bif.status = BS_NEED_ERASE;
+
+	found:
+		ctx->rblocks[rblock++] = bif;
+
+		if (expected_rblocks > -1 && rblock >= expected_rblocks)
 			break;
 	}
+
 	if (!cursor) {
-		pr_err("%s: not enough valid blocks found, need %d got %d\n",
-		       log_pfx, REQUIRED_GOOD_BLOCKS(total_blks), good_blocks);
+		pr_err("%s: not enough blocks found to build BBT/BMT\n", log_pfx);
 		return -ENOSPC;
 	}
+
+	if (expected_rblocks > -1 && rblock != expected_rblocks)
+		pr_info("%s: unexpected BMT pool size %d, expected %d\n",
+			log_pfx, rblock, expected_rblocks);
+
 	ctx->reserve_area_begin = cursor;
 	return 0;
 }

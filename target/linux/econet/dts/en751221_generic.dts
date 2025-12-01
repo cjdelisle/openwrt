@@ -10,17 +10,18 @@
 	memory@0 {
 		// We hope at least 64MB will be available on every device
 		device_type = "memory";
-		reg = <0x00000000 0x4000000>;
+		reg = <0x00000000 0x8000000>;
 	};
 
 	chosen {
 		stdout-path = "/serial@1fbf0000:115200";
-		linux,usable-memory-range = <0x00020000 0x3fe0000>;
+		linux,usable-memory-range = <0x00020000 0x7fe0000>;
 	};
 };
 
 &nand {
 	status = "okay";
+	econet,bmt;
 
 	partitions {
 		compatible = "fixed-partitions";
@@ -40,13 +41,13 @@
 			// is, but when we're doing testing, lets
 			// make sure nobody touches anything below 4MB
 			label = "bootloader";
-			reg = <0x0 0x00400000>;
+			reg = <0x0 0x00040000>;
 			read-only;
 		};
 
 		partition@3 {
 			label = "rest_of_flash";
-			reg = <0x00400000 0x40000000>;
+			reg = <0x00040000 0x40000000>;
 		};
 	};
 };
