@@ -1,0 +1,79 @@
+--- a/drivers/mtd/nand/spi/esmt.c
++++ b/drivers/mtd/nand/spi/esmt.c
+@@ -103,6 +103,60 @@ static const struct mtd_ooblayout_ops f5
+ 	.free = f50l1g41lb_ooblayout_free,
+ };
+ 
++/*
++ * F50L1G41A0 OOB spare area map (64 bytes)
++ * 0		Reserved
++ * 1:7		ECC Section 0
++ * 8:15		Free space 0, ECC protected (first byte is a bad block marker)
++ * 16		Reserved
++ * 17:23	ECC Section 1
++ * 24:31	Free space 1, ECC protected (first byte is a bad block marker)
++ * 32		Reserved
++ * 33:39	ECC Section 2
++ * 40:47	Free space 2, ECC protected
++ * 48		Reserved
++ * 49:55	ECC Section 3
++ * 46:63	Free space 3, ECC protected
++ */
++#define F50L1G41A0_ECC_OFFSET	1
++#define F50L1G41A0_ECC_LEN	7
++#define F50L1G41A0_FREE_OFFSET	8
++#define F50L1G41A0_FREE_LEN	8
++
++static int f50l1g41a0_ooblayout_ecc(struct mtd_info *mtd, int section,
++				    struct mtd_oob_region *region)
++{
++	struct nand_device *nand = mtd_to_nanddev(mtd);
++
++	if (section >= ESMT_OOB_SECTION_COUNT)
++		return -ERANGE;
++
++	region->offset = section * ESMT_OOB_SECTION_SIZE(nand) +
++			 F50L1G41A0_ECC_OFFSET;
++	region->length = F50L1G41A0_ECC_LEN;
++
++	return 0;
++}
++
++static int f50l1g41a0_ooblayout_free(struct mtd_info *mtd, int section,
++				     struct mtd_oob_region *region)
++{
++	struct nand_device *nand = mtd_to_nanddev(mtd);
++
++	if (section >= ESMT_OOB_SECTION_COUNT)
++		return -ERANGE;
++
++	region->offset = section * ESMT_OOB_SECTION_SIZE(nand) +
++			 F50L1G41A0_FREE_OFFSET;
++	region->length = F50L1G41A0_FREE_LEN;
++
++	return 0;
++}
++
++static const struct mtd_ooblayout_ops f50l1g41a0_ooblayout = {
++	.ecc = f50l1g41a0_ooblayout_ecc,
++	.free = f50l1g41a0_ooblayout_free,
++};
+ 
+ static const struct spinand_info esmt_8c_spinand_table[] = {
+ 	SPINAND_INFO("F50L1G41LC",
+@@ -117,6 +171,15 @@ static const struct spinand_info esmt_8c
+ };
+ 
+ static const struct spinand_info esmt_c8_spinand_table[] = {
++	SPINAND_INFO("F50L1G41A0",
++		     SPINAND_ID(SPINAND_READID_METHOD_OPCODE_ADDR, 0x21, 0x00),
++		     NAND_MEMORG(1, 2048, 64, 64, 1024, 20, 1, 1, 1),
++		     NAND_ECCREQ(1, 512),
++		     SPINAND_INFO_OP_VARIANTS(&read_cache_variants,
++					      &write_cache_variants,
++					      &update_cache_variants),
++		     0,
++		     SPINAND_ECCINFO(&f50l1g41a0_ooblayout, NULL)),
+ 	SPINAND_INFO("F50L1G41LB",
+ 		     SPINAND_ID(SPINAND_READID_METHOD_OPCODE_ADDR, 0x01, 0x7f,
+ 				0x7f, 0x7f),

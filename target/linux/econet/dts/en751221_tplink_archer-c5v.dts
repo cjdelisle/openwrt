@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/dts-v1/;
+
+#include "en751221.dtsi"
+
+/ {
+	model = "TP-Link Archer C5v";
+	compatible = "tplink,archer-c5v", "econet,en751221";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00000000 0x8000000>;
+	};
+
+	chosen {
+		stdout-path = "/serial@1fbf0000:115200";
+		linux,usable-memory-range = <0x00020000 0x07fe0000>;
+	};
+};
+
+&nand {
+	status = "okay";
+	econet,bmt;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		// This is a guess because we don't yet know the real layout.
+
+		partition@20000 {
+			label = "tclinux";
+			// Guessing we have 20MB available (????)
+			reg = <0x20000 0x1400000>;
+		};
+
+		partition@420000 {
+			reg = <0x420000 0xfe0000>;
+			label = "rootfs";
+			linux,rootfs;
+		};
+
+		partition@0 {
+			label = "all_of_flash";
+			reg = <0x0 0x40000000>;
+			read-only;
+		};
+	};
+};
+
+&gmac0 {
+	status = "okay";
+};
