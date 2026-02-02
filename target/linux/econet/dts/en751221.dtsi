@@ -73,15 +73,14 @@
 
 	ethernet: ethernet@1fb50000 {
 		compatible = "econet,en751221-eth";
-		reg = <0x1fb50000 0x10000>;
+		reg = <0x1fb50000 0x8000>;
 
 		resets = <&scuclk EN751221_FE_RST>,
 			 <&scuclk EN751221_FE_QDMA1_RST>,
 			 <&scuclk EN751221_FE_QDMA2_RST>,
-			 <&scuclk EN751221_GSW_RST>,
 			 <&scuclk EN751221_XPON_MAC_RST>,
 			 <&scuclk EN751221_XPON_PHY_RST>;
-		reset-names = "fe", "qdma0", "qdma1", "gsw",
+		reset-names = "fe", "qdma0", "qdma1",
 			      "xpon-mac", "xpon-phy";
 
 		#address-cells = <1>;
@@ -109,52 +108,300 @@
 			status = "disabled";
 			phy-mode = "rgmii-rxid";
 		};
+	};
 
-		 mdio: mdio-bus {
-			#address-cells = <1>;
-			#size-cells = <0>;
+	switch0: switch@1fb58000 {
+		compatible = "econet,en751221-switch";
+		reg = <0x1fb58000 0x8000>;
 
-			switch0: switch@1f {
-				compatible = "mediatek,mt7530";
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0x1f>;
-				mediatek,mcm;
-				reset-names = "mcm";
+		resets = <&scuclk EN751221_GSW_RST>;
+		reset-names = "gsw";
 
-				ports {
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-parent = <&intc>;
+		interrupts = <15>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		mediatek,mcm;
+		dsa,member = <0 0>;
+
+		ports {
+			port@0 {
+				status = "disabled";
+				phy-mode = "internal";
+				// label = "lan0";
+				phy-handle = <&gsw_phy8>;
+				reg = <0>;
+			};
+
+			port@1 {
+				status = "disabled";
+				phy-mode = "internal";
+				// label = "lan1";
+				phy-handle = <&gsw_phy9>;
+				reg = <1>;
+			};
+
+			port@2 {
+				status = "disabled";
+				phy-mode = "internal";
+				// label = "lan2";
+				phy-handle = <&gsw_phy10>;
+				reg = <2>;
+			};
+
+			port@3 {
+				status = "disabled";
+				phy-mode = "internal";
+				// label = "lan3";
+				phy-handle = <&gsw_phy11>;
+				reg = <3>;
+			};
+
+			port@4 {
+				status = "disabled";
+				// label = "lan4";
+				phy-handle = <&gsw_phy12>;
+				reg = <4>;
+			};
+
+			switch0port5: port@5 {
+				reg = <5>;
+				phy-mode = "rgmii";
+				// phy-handle = <&gsw_phy12>;
+				link = <&switch1port6>;
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			port@6 {
+				reg = <6>;
+				label = "cpu";
+				ethernet = <&gmac0>;
+				phy-mode = "internal";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+
+		mdio {
+			gsw_phy0: ethernet-phy@0 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <0>;
+				// phy-mode = "rgmii-id";
+				// status = "disabled";
+
+				leds {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					reg = <0>;
 
-					port@0 {
-						status = "disabled";
+					gsw_phy1_led0: led@0 {
 						reg = <0>;
+						status = "disabled";
+					};
+
+					gsw_phy1_led1: led@1 {
+						reg = <1>;
+						status = "disabled";
+					};
+				};
+			};
+
+			gsw_phy1: ethernet-phy@1 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <1>;
+				// phy-mode = "gmii";
+				// status = "disabled";
+
+				leds {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					gsw_phy2_led0: led@0 {
+						reg = <0>;
+						status = "disabled";
+					};
+
+					gsw_phy2_led1: led@1 {
+						reg = <1>;
+						status = "disabled";
+					};
+				};
+			};
+
+			gsw_phy2: ethernet-phy@2 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <2>;
+				// eee-broken-100tx;
+				// eee-broken-1000t;
+				// status = "disabled";
+				// phy-mode = "internal";
+
+				leds {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					gsw_phy3_led0: led@0 {
+						reg = <0>;
+						status = "disabled";
+					};
+
+					gsw_phy3_led1: led@1 {
+						reg = <1>;
+						status = "disabled";
+					};
+				};
+			};
+
+			gsw_phy3: ethernet-phy@3 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <3>;
+				// phy-mode = "rgmii-id";
+				// status = "disabled";
+
+				leds {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					gsw_phy4_led0: led@0 {
+						reg = <0>;
+						status = "disabled";
+					};
+
+					gsw_phy4_led1: led@1 {
+						reg = <1>;
+						status = "disabled";
+					};
+				};
+			};
+
+			gsw_phy4: ethernet-phy@4 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <4>;
+				// phy-mode = "internal";
+				// status = "disabled";
+
+				leds {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					gsw_phy5_led0: led@0 {
+						reg = <0>;
+						status = "disabled";
+					};
+
+					gsw_phy5_led1: led@1 {
+						reg = <1>;
+						status = "disabled";
+					};
+				};
+			};
+
+			gsw_phy8: ethernet-phy@8 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <8>;
+				phy-mode = "internal";
+			};
+			gsw_phy9: ethernet-phy@9 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <9>;
+				phy-mode = "internal";
+			};
+			gsw_phy10: ethernet-phy@10 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <10>;
+				phy-mode = "internal";
+			};
+			gsw_phy11: ethernet-phy@11 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <11>;
+				phy-mode = "internal";
+			};
+			gsw_phy12: ethernet-phy@12 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <12>;
+				phy-mode = "internal";
+			};
+
+			switch1: switch@31 {
+				compatible = "econet,en751221-switch";
+				reg = <31>;
+				dsa,member = <0 1>;
+
+				ports {
+					port@0 {
+						// status = "disabled";
 						label = "lan0";
+						reg = <0>;
+
+						phy-handle = <&gsw_phy0>;
+						// phy-mode = "internal";
+						// fixed-link {
+						// 	speed = <1000>;
+						// 	full-duplex;
+						// };
 					};
 
 					port@1 {
-						status = "disabled";
-						reg = <1>;
+						// status = "disabled";
 						label = "lan1";
+						reg = <1>;
+
+						phy-handle = <&gsw_phy1>;
+						// phy-mode = "internal";
 					};
 
 					port@2 {
-						status = "disabled";
-						reg = <2>;
+						// status = "disabled";
 						label = "lan2";
+						reg = <2>;
+
+						phy-handle = <&gsw_phy2>;
+						// phy-mode = "internal";
 					};
 
 					port@3 {
-						status = "disabled";
-						reg = <3>;
+						// status = "disabled";
 						label = "lan3";
+						reg = <3>;
+
+						phy-handle = <&gsw_phy3>;
+						// phy-mode = "internal";
 					};
 
-					port@6 {
+					port@4 {
+						// status = "disabled";
+						label = "lan4";
+						reg = <4>;
+
+						phy-handle = <&gsw_phy4>;
+						// phy-mode = "internal";
+					};
+
+					port@5 {
+						// status = "disabled";
+						label = "lan5";
+						reg = <5>;
+
+						// phy-handle = <&gsw_phy0>;
+						phy-mode = "rgmii";
+						fixed-link {
+							speed = <1000>;
+							full-duplex;
+						};
+					};
+
+					switch1port6: port@6 {
 						reg = <6>;
-						label = "cpu";
-						ethernet = <&gmac0>;
+						link = <&switch0port5>;
 						phy-mode = "trgmii";
 
 						fixed-link {
@@ -164,6 +411,7 @@
 					};
 				};
 			};
+
 		};
 	};
 

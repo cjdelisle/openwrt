@@ -1,0 +1,42 @@
+#!/bin/sh
+
+alias a="rmmod econet-gsw-mmio; rmmod econet-gsw-mdio; rmmod econet-gsw; rmmod econet-eth; rm ./*.ko; wget http://5.135.140.105:8099/econet-eth.ko ; wget http://5.135.140.105:8099/econet-gsw-mdio.ko ; wget http://5.135.140.105:8099/econet-gsw-mmio.ko ; wget http://5.135.140.105:8099/econet-gsw.ko"
+alias b="insmod ./econet-eth.ko ; insmod ./econet-gsw.ko ; insmod ./econet-gsw-mmio.ko ; insmod ./econet-gsw-mdio.ko"
+alias c="cat /sys/kernel/debug/econet_eth/qdma0/descs0"
+alias d="service network stop; brctl delif br-lan eth0; ifconfig eth0 up; udhcpc -i eth0"
+alias e="rm ./econet-eth.ko; wget http://5.135.140.105:8099/econet-eth.ko; rmmod econet-eth"
+
+ext_r() {
+	REG=$1
+	PAGE=$(( (REG >> 6) & 0x3ff ))
+	R=$(( (REG >> 2) & 0xf ))
+	mdio econet_gsw-0 phy 31 raw 0x1f $PAGE
+	LO=$(mdio econet_gsw-0 phy 31 raw $R)
+	HI=$(mdio econet_gsw-0 phy 31 raw 0x10)
+	VAL=$(( (HI << 16) | (LO & 0xffff) ))
+	printf "0x%08x\n" $VAL
+}
+
+ext_mib() {
+	PORT=$1
+	BASE=$((0x4000 + 0x100 * PORT))
+	echo "Port $PORT tx_bytes=$(ext_r $((BASE + 0x48))) rx_bytes $(ext_r $((BASE + 0xa8)))"
+}
+
+int_r() {
+	REG=$1
+	devmem $((0x1fb58000 + REG))
+}
+
+int_mib() {
+	PORT=$1
+	BASE=$((0x4000 + 0x100 * PORT))
+	echo "Port $PORT tx_bytes=$(int_r $((BASE + 0x48))) rx_bytes $(int_r $((BASE + 0xa8)))"
+}
+
+mib() {
+	echo 'Internal Switch'
+	for i in $(seq 0 6); do int_mib $i; done
+	echo 'External Switch'
+	for i in $(seq 0 6); do ext_mib $i; done
+}

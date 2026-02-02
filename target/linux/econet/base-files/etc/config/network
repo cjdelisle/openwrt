@@ -1,0 +1,8 @@
+config interface 'loopback'
+        option device 'lo'
+        option proto 'static'
+        list ipaddr '127.0.0.1/8'
+
+config globals 'globals'
+        option dhcp_default_duid '0004c96b820333c84b18b0511b31dc7f5464'
+        option ula_prefix 'fd88:20a7:549e::/48'

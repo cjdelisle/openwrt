@@ -1,0 +1,72 @@
+--- a/drivers/net/dsa/mt7530.c
++++ b/drivers/net/dsa/mt7530.c
+@@ -362,6 +362,11 @@ mt7530_fdb_write(struct mt7530_priv *pri
+ /* Set up switch core clock for MT7530 */
+ static void mt7530_pll_setup(struct mt7530_priv *priv)
+ {
++	if (priv->id == ID_EN751221_EXT || priv->id == ID_EN751221) {
++		dev_warn(priv->dev, "mt7530_pll_setup not possible on EN751221");
++		return;
++	}
++
+ 	/* Disable core clock */
+ 	core_clear(priv, CORE_TRGMII_GSW_CLK_CG, REG_GSWCK_EN);
+ 
+@@ -3253,6 +3258,26 @@ const struct mt753x_info mt753x_table[]
+ 		.phy_write_c45 = mt7531_ind_c45_phy_write,
+ 		.mac_port_get_caps = en7581_mac_port_get_caps,
+ 	},
++	[ID_EN751221] = {
++		.id = ID_EN751221,
++		.pcs_ops = &mt7530_pcs_ops,
++		.sw_setup = mt7530_setup,
++		.phy_read_c22 = mt7531_ind_c22_phy_read,
++		.phy_write_c22 = mt7531_ind_c22_phy_write,
++		.phy_read_c45 = mt7531_ind_c45_phy_read,
++		.phy_write_c45 = mt7531_ind_c45_phy_write,
++		.mac_port_get_caps = mt7530_mac_port_get_caps,
++	},
++	[ID_EN751221_EXT] = {
++		.id = ID_EN751221_EXT,
++		.pcs_ops = &mt7530_pcs_ops,
++		.sw_setup = mt7530_setup,
++		.phy_read_c22 = mt7530_phy_read_c22,
++		.phy_write_c22 = mt7530_phy_write_c22,
++		.phy_read_c45 = mt7530_phy_read_c45,
++		.phy_write_c45 = mt7530_phy_write_c45,
++		.mac_port_get_caps = mt7530_mac_port_get_caps,
++	},
+ };
+ EXPORT_SYMBOL_GPL(mt753x_table);
+ 
+--- a/drivers/net/dsa/mt7530.h
++++ b/drivers/net/dsa/mt7530.h
+@@ -20,6 +20,8 @@ enum mt753x_id {
+ 	ID_MT7531 = 2,
+ 	ID_MT7988 = 3,
+ 	ID_EN7581 = 4,
++	ID_EN751221 = 5,
++	ID_EN751221_EXT = 6,
+ };
+ 
+ #define	NUM_TRGMII_CTRL			5
+--- a/drivers/net/dsa/mt7530-mdio.c
++++ b/drivers/net/dsa/mt7530-mdio.c
+@@ -132,6 +132,7 @@ static const struct of_device_id mt7530_
+ 	{ .compatible = "mediatek,mt7621", .data = &mt753x_table[ID_MT7621], },
+ 	{ .compatible = "mediatek,mt7530", .data = &mt753x_table[ID_MT7530], },
+ 	{ .compatible = "mediatek,mt7531", .data = &mt753x_table[ID_MT7531], },
++	{ .compatible = "econet,en751221-switch", .data = &mt753x_table[ID_EN751221_EXT], },
+ 	{ /* sentinel */ },
+ };
+ MODULE_DEVICE_TABLE(of, mt7530_of_match);
+--- a/drivers/net/dsa/mt7530-mmio.c
++++ b/drivers/net/dsa/mt7530-mmio.c
+@@ -13,6 +13,7 @@
+ static const struct of_device_id mt7988_of_match[] = {
+ 	{ .compatible = "airoha,en7581-switch", .data = &mt753x_table[ID_EN7581], },
+ 	{ .compatible = "mediatek,mt7988-switch", .data = &mt753x_table[ID_MT7988], },
++	{ .compatible = "econet,en751221-switch", .data = &mt753x_table[ID_EN751221], },
+ 	{ /* sentinel */ },
+ };
+ MODULE_DEVICE_TABLE(of, mt7988_of_match);

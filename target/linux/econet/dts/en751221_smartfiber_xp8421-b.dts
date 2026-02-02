@@ -52,24 +52,25 @@
 
 		partition@80000 {
 			label = "tclinux";
-			reg = <0x80000 0x1400000>;
+			reg = <0x80000 0x1000000>;
 			econet,enable-remap;
 		};
 
 		partition@480000 {
 			label = "rootfs";
-			reg = <0x480000 0xf80000>;
+			reg = <0x480000 0xc00000>;
 			linux,rootfs;
 		};
 
-		partition@1480000 {
+		partition@1080000 {
 			label = "tclinux_alt";
-			reg = <0x1480000 0x1400000>;
+			reg = <0x1080000 0x1000000>;
+			econet,enable-remap;
 		};
 
 		partition@2880000 {
 			label = "openjdk";
-			reg = <0x2880000 0x2000000>;
+			reg = <0x2080000 0x2000000>;
 		};
 
 		partition@4880000 {
