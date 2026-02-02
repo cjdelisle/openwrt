@@ -77,3 +77,15 @@
  	SPINAND_INFO("F50L1G41LB",
  		     SPINAND_ID(SPINAND_READID_METHOD_OPCODE_ADDR, 0x01, 0x7f,
  				0x7f, 0x7f),
+--- a/drivers/mtd/nand/spi/core.c
++++ b/drivers/mtd/nand/spi/core.c
+@@ -1180,6 +1180,9 @@ static int spinand_manufacturer_match(st
+ 	unsigned int i;
+ 	int ret;
+ 
++	pr_info("spinand_manufacturer_match() -> %02x%02x%02x%02x%02x %d\n",
++		id[0], id[1], id[2], id[3], id[4], spinand->id.len);
++
+ 	for (i = 0; i < ARRAY_SIZE(spinand_manufacturers); i++) {
+ 		const struct spinand_manufacturer *manufacturer =
+ 			spinand_manufacturers[i];
