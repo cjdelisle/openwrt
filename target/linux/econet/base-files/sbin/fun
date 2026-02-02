@@ -40,3 +40,14 @@ mib() {
 	echo 'External Switch'
 	for i in $(seq 0 6); do ext_mib $i; done
 }
+
+preg() {
+	echo
+	mdio econet_gsw-0 2 raw 31 $1; for i in $(seq 0 31); do
+		mdio econet_gsw-0 2 raw $i
+	done | tr '\n' ' '
+	echo
+	mdio econet_gsw-0 2 raw 31 0
+}
+
+
