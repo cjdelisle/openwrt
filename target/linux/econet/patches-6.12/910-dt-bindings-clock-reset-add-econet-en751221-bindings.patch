@@ -124,7 +124,7 @@ the same chip-scu as airoha,en7581-chip-scu.
 \ No newline at end of file
 --- /dev/null
 +++ b/include/dt-bindings/reset/econet,en751221-scu.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,50 @@
 +/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 +
 +#ifndef __DT_BINDINGS_RESET_CONTROLLER_ECONET_EN751221_H_
@@ -172,5 +172,6 @@ the same chip-scu as airoha,en7581-chip-scu.
 +#define EN751221_DMT_RST		39
 +#define EN751221_USB_PHY_P0_RST		40
 +#define EN751221_USB_PHY_P1_RST		41
++#define EN751221_MCM_GSW_RST		42
 +
 +#endif /* __DT_BINDINGS_RESET_CONTROLLER_ECONET_EN751221_H_ */

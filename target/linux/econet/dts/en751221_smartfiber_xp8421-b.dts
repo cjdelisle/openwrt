@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /dts-v1/;
 
+#include <dt-bindings/leds/common.h>
+
 #include "en751221.dtsi"
 
 / {
@@ -110,4 +112,113 @@
 	status = "okay";
 	nvmem-cells = <&macaddr_bootloader_ff48 0>;
 	nvmem-cell-names = "mac-address";
+};
+
+/* Ports 1, 2 & 3 are limited to 100Mb by PCB wiring. */
+&switch1port1 {
+	label = "lan1";
+	status = "okay";
+};
+&switch1phy1 {
+	max-speed = <100>;
+	leds {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		led@0 {
+			reg = <0>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <0>;
+			default-state = "keep";
+		};
+
+		led@1 {
+			reg = <1>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <1>;
+			default-state = "keep";
+		};
+	};
+};
+&switch1port2 {
+	label = "lan2";
+	status = "okay";
+};
+&switch1phy2 {
+	max-speed = <100>;
+	leds {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		led@0 {
+			reg = <0>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <0>;
+			default-state = "keep";
+		};
+
+		led@1 {
+			reg = <1>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <1>;
+			default-state = "keep";
+		};
+	};
+};
+&switch1port3 {
+	label = "lan3";
+	status = "okay";
+};
+&switch1phy3 {
+	max-speed = <100>;
+	leds {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		led@0 {
+			reg = <0>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <0>;
+			default-state = "keep";
+		};
+
+		led@1 {
+			reg = <1>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <1>;
+			default-state = "keep";
+		};
+	};
+};
+&switch1port4 {
+	label = "lan4";
+	status = "okay";
+};
+&switch1phy4 {
+	leds {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		led@0 {
+			reg = <0>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <0>;
+			default-state = "keep";
+		};
+
+		led@1 {
+			reg = <1>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_LAN;
+			function-enumerator = <1>;
+			default-state = "keep";
+		};
+	};
 };

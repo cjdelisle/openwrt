@@ -53,7 +53,7 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
  
  #define RST_NR_PER_BANK			32
  
-@@ -33,15 +36,47 @@
+@@ -33,15 +36,68 @@
  #define   REG_RESET_CONTROL_PCIEHB	BIT(29)
  #define   REG_RESET_CONTROL_PCIE1	BIT(27)
  #define   REG_RESET_CONTROL_PCIE2	BIT(26)
@@ -79,7 +79,25 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
  #define REG_RST_CTRL1			0x834
 +#define EN751221_REG_RST_DMT		0x84
 +#define EN751221_REG_RST_USB		0xec
++#define EN751221_REG_RST_MCM_GSW	0xf8
 +
++/**
++ * enum en_special_case_resets - Resets that cannot be handled normally
++ *
++ * @SC_RST_MIN: Not a reset
++ * @SC_RST_EN751221_MCM_GSW: Reset for MCM external MT7530 on EN751221,
++ *                           line is inverted and in the chip_scu regmap space
++ */
++enum en_special_case_resets {
++	SC_RST_MIN		= 0x8000,
++	SC_RST_EN751221_MCM_GSW,
++};
++
++/**
++ * enum en_hir - Possible values of Hardware ID Register
++ *
++ * Needed because some clocks are fixed and differ depending on chip ID.
++ */
 +enum en_hir {
 +	HIR_UNKNOWN	= -1,
 +	HIR_TC3169	= 0,
@@ -96,12 +114,23 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
 +	HIR_EN7528	= 11,
 +	HIR_EN7523	= 12,
 +	HIR_EN7581	= 13,
-+	HIR_MAX		= 14,
++
++	HIR_AN7563	= 15,
++	HIR_AN7583	= 16,
++	HIR_MAX		= 17,
 +};
  
  struct en_clk_desc {
  	int id;
-@@ -93,6 +128,8 @@ static const u32 bus7581_base[] = { 6000
+@@ -72,6 +128,7 @@ struct en_rst_data {
+ 	const u16 *bank_ofs;
+ 	const u16 *idx_map;
+ 	void __iomem *base;
++	struct regmap *chip_scu;
+ 	struct reset_controller_dev rcdev;
+ };
+ 
+@@ -93,6 +150,8 @@ static const u32 bus7581_base[] = { 6000
  static const u32 npu7581_base[] = { 800000000, 750000000, 720000000, 600000000 };
  static const u32 crypto_base[] = { 540000000, 480000000 };
  static const u32 emmc7581_base[] = { 200000000, 150000000 };
@@ -110,7 +139,7 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
  
  static const struct en_clk_desc en7523_base_clks[] = {
  	{
-@@ -300,6 +337,13 @@ static const u16 en7581_rst_ofs[] = {
+@@ -300,6 +359,13 @@ static const u16 en7581_rst_ofs[] = {
  	REG_RST_CTRL1,
  };
  
@@ -124,7 +153,7 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
  static const u16 en7523_rst_map[] = {
  	/* RST_CTRL2 */
  	[EN7523_XPON_PHY_RST]		= 0,
-@@ -405,8 +449,61 @@ static const u16 en7581_rst_map[] = {
+@@ -405,8 +471,64 @@ static const u16 en7581_rst_map[] = {
  	[EN7581_XPON_MAC_RST]		= RST_NR_PER_BANK + 31,
  };
  
@@ -178,51 +207,98 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
 +	/* RST_USB */
 +	[EN751221_USB_PHY_P0_RST]	= 3 * RST_NR_PER_BANK + 6,
 +	[EN751221_USB_PHY_P1_RST]	= 3 * RST_NR_PER_BANK + 7,
++
++	[EN751221_MCM_GSW_RST]		= SC_RST_EN751221_MCM_GSW,
 +};
 +
  static int en7581_reset_register(struct device *dev, void __iomem *base,
 -				 const u16 *rst_map, int nr_resets);
 +				 const u16 *rst_map, int nr_resets,
-+				 const u16 *rst_reg_ofs);
++				 const u16 *rst_reg_ofs,
++				 struct regmap *chip_scu);
  
  static u32 en7523_get_base_rate(const struct en_clk_desc *desc, u32 val)
  {
-@@ -604,7 +701,8 @@ static int en7523_clk_hw_init(struct pla
+@@ -604,7 +726,8 @@ static int en7523_clk_hw_init(struct pla
  	en7523_register_clocks(&pdev->dev, clk_data, base, np_base);
  
  	return en7581_reset_register(&pdev->dev, np_base, en7523_rst_map,
 -				     ARRAY_SIZE(en7523_rst_map));
 +				     ARRAY_SIZE(en7523_rst_map),
-+				     en7581_rst_ofs);
++				     en7581_rst_ofs, NULL);
  }
  
  static void en7581_register_clocks(struct device *dev, struct clk_hw_onecell_data *clk_data,
-@@ -705,7 +803,8 @@ static const struct reset_control_ops en
+@@ -653,9 +776,17 @@ static int en7523_reset_update(struct re
+ 			       unsigned long id, bool assert)
+ {
+ 	struct en_rst_data *rst_data = container_of(rcdev, struct en_rst_data, rcdev);
+-	void __iomem *addr = rst_data->base + rst_data->bank_ofs[id / RST_NR_PER_BANK];
++	void __iomem *addr;
+ 	u32 val;
+ 
++	switch (id) {
++	case SC_RST_EN751221_MCM_GSW:
++		regmap_update_bits(rst_data->chip_scu, EN751221_REG_RST_MCM_GSW,
++				   1, !assert);
++		return 0;
++	}
++
++	addr = rst_data->base + rst_data->bank_ofs[id / RST_NR_PER_BANK];
+ 	val = readl(addr);
+ 	if (assert)
+ 		val |= BIT(id % RST_NR_PER_BANK);
+@@ -682,8 +813,20 @@ static int en7523_reset_status(struct re
+ 			       unsigned long id)
+ {
+ 	struct en_rst_data *rst_data = container_of(rcdev, struct en_rst_data, rcdev);
+-	void __iomem *addr = rst_data->base + rst_data->bank_ofs[id / RST_NR_PER_BANK];
++	void __iomem *addr;
++	u32 val;
++	int ret;
++
++	switch (id) {
++	case SC_RST_EN751221_MCM_GSW:
++		ret = regmap_read(rst_data->chip_scu, EN751221_REG_RST_MCM_GSW, &val);
++		if (ret < 0)
++			return ret;
+ 
++		return !val;
++	}	
++
++	addr = rst_data->base + rst_data->bank_ofs[id / RST_NR_PER_BANK];
+ 	return !!(readl(addr) & BIT(id % RST_NR_PER_BANK));
+ }
+ 
+@@ -705,7 +848,9 @@ static const struct reset_control_ops en
  };
  
  static int en7581_reset_register(struct device *dev, void __iomem *base,
 -				 const u16 *rst_map, int nr_resets)
 +				 const u16 *rst_map, int nr_resets,
-+				 const u16 *rst_reg_ofs)
++				 const u16 *rst_reg_ofs,
++				 struct regmap *chip_scu)
  {
  	struct en_rst_data *rst_data;
  
-@@ -713,7 +812,7 @@ static int en7581_reset_register(struct
+@@ -713,8 +858,9 @@ static int en7581_reset_register(struct
  	if (!rst_data)
  		return -ENOMEM;
  
 -	rst_data->bank_ofs = en7581_rst_ofs;
 +	rst_data->bank_ofs = rst_reg_ofs;
  	rst_data->idx_map = rst_map;
++	rst_data->chip_scu = chip_scu;
  	rst_data->base = base;
  
-@@ -752,7 +851,123 @@ static int en7581_clk_hw_init(struct pla
+ 	rst_data->rcdev.nr_resets = nr_resets;
+@@ -752,7 +898,123 @@ static int en7581_clk_hw_init(struct pla
  	writel(val | 3, base + REG_NP_SCU_PCIC);
  
  	return en7581_reset_register(&pdev->dev, base, en7581_rst_map,
 -				     ARRAY_SIZE(en7581_rst_map));
 +				     ARRAY_SIZE(en7581_rst_map),
-+				     en7581_rst_ofs);
++				     en7581_rst_ofs, map);
 +}
 +
 +static enum en_hir get_hw_id(void __iomem *np_base)
@@ -337,11 +413,11 @@ Signed-off-by: Caleb James DeLisle <cjd@cjdns.fr>
 +
 +	return en7581_reset_register(&pdev->dev, base, en751221_rst_map,
 +				     ARRAY_SIZE(en751221_rst_map),
-+				     en751221_rst_ofs);
++				     en751221_rst_ofs, map);
  }
  
  static int en7523_clk_probe(struct platform_device *pdev)
-@@ -799,9 +1014,20 @@ static const struct en_clk_soc_data en75
+@@ -799,9 +1061,20 @@ static const struct en_clk_soc_data en75
  	.hw_init = en7581_clk_hw_init,
  };
  
