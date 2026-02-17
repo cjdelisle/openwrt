@@ -1006,6 +1006,11 @@ static int r_scan_reserve(struct en75_bmt_m *ctx)
 				return -ENOMEM;
 		}
 
+		fdm[0] = 0xde;
+		fdm[1] = 0xbe;
+		fdm[2] = 0xad;
+		fdm[3] = 0xef;
+
 		for (int i = 0; i < INITIAL_READ_TRIES; i++) {
 			ret = bbt_nand_read(blk_pg(cursor),
 					    data_buf,
@@ -1020,7 +1025,8 @@ static int r_scan_reserve(struct en75_bmt_m *ctx)
 		};
 
 		if (ret || fdm_is_bad(fdm)) {
-			pr_info("%s: skipping bad block %d in reserve area\n", log_pfx, cursor);
+			pr_info("%s: skipping bad block %d in reserve area: %02x%02x%02x%02x\n",
+				log_pfx, cursor, fdm[0], fdm[1], fdm[2], fdm[3]);
 			bif.status = BS_BAD;
 		} else if (fdm_is_mapped(fdm)) {
 			pr_debug("%s: found mapped block %d\n", log_pfx, cursor);
